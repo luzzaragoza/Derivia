@@ -840,10 +840,12 @@ class Juego(Escena):
         """Lista de (grupo, teclas)."""
         grupos = [(n, list(g)) for n, g in GRUPOS_TECLADO]
         extra = []
-        if VAR_Y in self.paso.variables:
-            extra.append(("y", "y", 0))
-        if VAR_Z in self.paso.variables:
-            extra.append(("z", "z", 0))
+        # las letras van en la fila de números si está abierta (ahí ya están x, y, z); si no, acá
+        if not self.app.progreso.teclado_numerico:
+            if VAR_Y in self.paso.variables:
+                extra.append(("y", "y", 0))
+            if VAR_Z in self.paso.variables:
+                extra.append(("z", "z", 0))
         if self.paso.chequeo == "primitiva":
             extra.append((r"+\,C", "+C", 0))
         if self.paso.chequeo == "numero":
