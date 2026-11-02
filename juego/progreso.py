@@ -91,6 +91,27 @@ class Progreso:
         tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
         tmp.replace(self.archivo)
 
+    def borrar_todo(self):
+        """Empieza de cero (niveles, cuaderno, monedas, ropa, nombre del gato). Los ajustes de sonido
+        y pantalla se mantienen. Antes guarda una copia de respaldo al lado del archivo.
+        Devuelve la ruta de la copia (o None si no había nada que copiar)."""
+        respaldo = None
+        if self.archivo.exists():
+            import time
+            respaldo = self.archivo.with_name(f"progreso_respaldo_{time.strftime('%Y-%m-%d_%H-%M-%S')}.json")
+            try:
+                respaldo.write_bytes(self.archivo.read_bytes())
+            except OSError:
+                respaldo = None
+        self.niveles, self.cuaderno = {}, []
+        self.todo_desbloqueado = False
+        self.monedas = 0
+        self.ropa_comprada, self.ropa_puesta = [], {}
+        self.nombre_gato = ""
+        self.repaso_mundos = []
+        self.guardar()
+        return respaldo
+
     # ------------------------------------------------ niveles
     def estrellas(self, mundo_id, idx):
         return self.niveles.get(_clave_nivel(mundo_id, idx), {}).get("estrellas", 0)

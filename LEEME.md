@@ -89,7 +89,12 @@ Si escribís algo que no se entiende, no perdés vidas.
 
 ## Dónde se guarda el progreso
 
-En `%APPDATA%\Derivia\progreso.json`. Si lo borrás, el juego arranca de cero.
+En `%APPDATA%\Derivia\progreso.json` (normalmente `C:\Users\TU_USUARIO\AppData\Roaming\Derivia\progreso.json`).
+Para abrir la carpeta: tecla Windows + R, escribí `%APPDATA%\Derivia` y Enter.
+
+- **Copia de seguridad:** copiá `progreso.json` a otro lado. Para recuperarla, cerrá el juego y volvé a ponerla en esa carpeta.
+- **Empezar de cero:** Opciones → *Borrar progreso*. Pide confirmación y antes de borrar deja una copia
+  `progreso_respaldo_<fecha>.json` en la misma carpeta (para volver atrás, renombrala a `progreso.json`).
 
 Si venías jugando cuando el juego se llamaba Calculandia, la primera vez que abras Derivia se copia solo tu progreso de `%APPDATA%\Calculandia`.
 
