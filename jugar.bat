@@ -10,4 +10,6 @@ if not exist .venv (
 ) else (
   call .venv\Scripts\activate.bat
 )
+REM Skia (graficos en alta calidad). Si falta, se instala una sola vez.
+python -c "import skia" 2>nul || pip install skia-python
 start "" pythonw main.py

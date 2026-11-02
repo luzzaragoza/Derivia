@@ -14,7 +14,11 @@ matplotlib.rcParams["mathtext.fontset"] = "cm"
 from matplotlib.font_manager import FontProperties  # noqa: E402
 from matplotlib.mathtext import MathTextParser  # noqa: E402
 
-ANCHO, ALTO = 1280, 720
+from . import lienzo as dibujo  # noqa: E402
+from . import pincel  # noqa: E402
+from .lienzo import ALTO, ANCHO, Lienzo, escala  # noqa: E402
+
+_REEXPORTA = (ANCHO, ALTO)
 
 # ------------------------------------------------------------ paleta "aventura"
 CIELO_ARRIBA = (120, 200, 234)
@@ -72,23 +76,47 @@ _FUENTES = {}
 _GLIFOS = {}
 
 
+class Fuente:
+    """Una letra a la resolución real de la pantalla, pero que mide en unidades lógicas."""
+
+    def __init__(self, archivo, tam):
+        self.e = escala()
+        self.f = pygame.font.Font(archivo, max(1, round(tam * self.e)))
+
+    def size(self, t):
+        w, h = self.f.size(t)
+        return (w / self.e, h / self.e)
+
+    def render(self, t, aa=True, color=(0, 0, 0)):
+        return Lienzo.desde(self.f.render(t, True, color), self.e)
+
+    def get_ascent(self):
+        return self.f.get_ascent() / self.e
+
+    def get_descent(self):
+        return self.f.get_descent() / self.e
+
+    def get_height(self):
+        return self.f.get_height() / self.e
+
+
 def fuente(tam, negrita=False, mono=False, dejavu=False):
     """negrita = Fredoka One (títulos, botones, etiquetas); si no, DejaVu Sans (texto largo)."""
-    clave = (tam, negrita, mono, dejavu)
+    clave = (tam, negrita, mono, dejavu, escala())
     if clave not in _FUENTES:
         if negrita and not mono and not dejavu and os.path.exists(_FREDOKA):
-            _FUENTES[clave] = pygame.font.Font(_FREDOKA, int(tam * 1.08))
+            _FUENTES[clave] = Fuente(_FREDOKA, tam * 1.08)
         else:
             nombre = "DejaVuSansMono" if mono else "DejaVuSans"
             if negrita:
                 nombre += "-Bold"
-            _FUENTES[clave] = pygame.font.Font(os.path.join(_DIR_FUENTES, nombre + ".ttf"), tam)
+            _FUENTES[clave] = Fuente(os.path.join(_DIR_FUENTES, nombre + ".ttf"), tam)
     return _FUENTES[clave]
 
 
 def _fredoka_tiene(cadena):
     """Fredoka One no trae π, √, ∫, flechas, etc.: en ese caso se usa DejaVu."""
-    f = fuente(20, True)
+    f = fuente(20, True).f
     for ch in set(cadena):
         if ch not in _GLIFOS:
             if ch.isspace() or ord(ch) < 0x250:
@@ -116,14 +144,14 @@ _CACHE_BORDE = {}
 
 def texto_borde(cadena, tam, color, color_borde=BORDE, grosor=3, sombra=True):
     """Texto de título con contorno (y sombrita), estilo videojuego."""
-    clave = (cadena, tam, color, color_borde, grosor, sombra)
+    clave = (cadena, tam, color, color_borde, grosor, sombra, escala())
     if clave in _CACHE_BORDE:
         return _CACHE_BORDE[clave]
     f = fuente_para(cadena, tam, True)
     base = f.render(cadena, True, color)
     contorno = f.render(cadena, True, color_borde)
     w, h = base.get_width() + 2 * grosor, base.get_height() + 2 * grosor + (grosor if sombra else 0)
-    sup = pygame.Surface((w, h), pygame.SRCALPHA)
+    sup = Lienzo(*((w, h)))
     pasos = max(12, grosor * 6)
     if sombra:
         for k in range(pasos):
@@ -166,32 +194,34 @@ def espaciar_integrales(tex):
 def formula(tex, tam=28, color=TINTA):
     """Dibuja LaTeX (sin $). tam ~ altura en píxeles de una letra grande."""
     tex = espaciar_integrales(tex)
-    clave = (tex, tam, color)
+    e = escala()
+    clave = (tex, tam, color, e)
     if clave in _CACHE_MATE:
         return _CACHE_MATE[clave]
     global _PARSER
     if _PARSER is None:
         _PARSER = MathTextParser("agg")
     try:
-        r = _PARSER.parse(f"${tex}$", dpi=72, prop=FontProperties(size=tam))
+        # se dibuja con más puntos por pulgada: queda nítida a la resolución real
+        r = _PARSER.parse(f"${tex}$", dpi=72 * e, prop=FontProperties(size=tam))
         alfa = np.asarray(r.image)
-        prof = int(round(r.depth))
+        prof = r.depth / e
     except Exception:
         s = texto(tex, int(tam * 0.7), color)
         f = Formula(s, 4)
         _CACHE_MATE[clave] = f
         return f
     h, w = alfa.shape
-    sup = pygame.Surface((max(1, w), max(1, h)), pygame.SRCALPHA)
-    sup.fill(color + (0,) if len(color) == 3 else color)
+    fis = pygame.Surface((max(1, w), max(1, h)), pygame.SRCALPHA)
+    fis.fill(tuple(color[:3]) + (0,))
     if w and h:
-        rgb = pygame.surfarray.pixels3d(sup)
+        rgb = pygame.surfarray.pixels3d(fis)
         rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2] = color[0], color[1], color[2]
         del rgb
-        a = pygame.surfarray.pixels_alpha(sup)
+        a = pygame.surfarray.pixels_alpha(fis)
         a[:, :] = alfa.T
         del a
-    f = Formula(sup, prof)
+    f = Formula(Lienzo.desde(fis, e), prof)
     _CACHE_MATE[clave] = f
     return f
 
@@ -200,7 +230,7 @@ def escalar_a(sup, ancho_max):
     if sup.get_width() <= ancho_max:
         return sup
     k = ancho_max / sup.get_width()
-    return pygame.transform.smoothscale(sup, (int(sup.get_width() * k), max(1, int(sup.get_height() * k))))
+    return dibujo.escalar(sup, (int(sup.get_width() * k), max(1, int(sup.get_height() * k))))
 
 
 def fracciones_grandes(tex):
@@ -243,7 +273,7 @@ def _trozos(cadena):
 
 def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.25, color_negrita=None):
     """Texto común con fórmulas $...$ y **negritas**, cortado en renglones."""
-    clave = (cadena, tam, color, ancho, centrado, interlineado, color_negrita)
+    clave = (cadena, tam, color, ancho, centrado, interlineado, color_negrita, escala())
     if clave in _CACHE_RICO:
         return _CACHE_RICO[clave]
     f_normal = fuente(tam)
@@ -281,7 +311,7 @@ def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.
         alto_total += max(int((arr + aba) * 1.0), int(tam * interlineado)) + int(tam * (interlineado - 1))
     ancho_total = max([w for _, _, w in medidas] + [1])
     ancho_sup = ancho if centrado else ancho_total
-    sup = pygame.Surface((max(1, ancho_sup), max(1, alto_total)), pygame.SRCALPHA)
+    sup = Lienzo(max(1, ancho_sup), max(1, alto_total))
     y = 0
     for r, (arr, aba, w) in zip(renglones, medidas):
         dx = (ancho_sup - w) // 2 if centrado else 0
@@ -295,23 +325,38 @@ def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.
 
 
 # ------------------------------------------------------------ formas
+def _pegar(sup, pieza_m, x, y):
+    pieza, m = pieza_m
+    if pieza is None:
+        return False
+    sup.blit(pieza, (x - m, y - m))
+    return True
+
+
 def caja(sup, rect, color, radio=16, sombra=True, borde=None, grosor=2):
     rect = pygame.Rect(rect)
+    if len(color) == 3 and pincel.HAY_SKIA and _pegar(sup, pincel.panel(
+            rect.width, rect.height, color, borde or oscurecer(color, 0.8), radio, sombra, grosor if borde else 0,
+            5 if sombra else 0, 0.15), rect.x, rect.y):
+        return
     if sombra:
         s = rect.move(0, 5)
-        pygame.draw.rect(sup, oscurecer(color, 0.78), s, border_radius=radio)
-    pygame.draw.rect(sup, color, rect, border_radius=radio)
+        dibujo.rect(sup, oscurecer(color, 0.78), s, border_radius=radio)
+    dibujo.rect(sup, color, rect, border_radius=radio)
     if borde:
-        pygame.draw.rect(sup, borde, rect, grosor, border_radius=radio)
+        dibujo.rect(sup, borde, rect, grosor, border_radius=radio)
 
 
 def tarjeta(sup, rect, color=TARJETA, radio=18, borde=ARENA_OSC, alto_base=6):
     """Tarjeta 'de juego': cara clara, base más oscura abajo y contorno."""
     rect = pygame.Rect(rect)
+    if pincel.HAY_SKIA and _pegar(sup, pincel.panel(rect.width, rect.height, color, borde, radio, True, 3, alto_base),
+                                  rect.x, rect.y):
+        return
     base = rect.move(0, alto_base)
-    pygame.draw.rect(sup, oscurecer(borde, 0.9), base, border_radius=radio)
-    pygame.draw.rect(sup, color, rect, border_radius=radio)
-    pygame.draw.rect(sup, borde, rect, 3, border_radius=radio)
+    dibujo.rect(sup, oscurecer(borde, 0.9), base, border_radius=radio)
+    dibujo.rect(sup, color, rect, border_radius=radio)
+    dibujo.rect(sup, borde, rect, 3, border_radius=radio)
 
 
 def destello(sup, centro, tam, color=(255, 240, 160)):
@@ -319,53 +364,72 @@ def destello(sup, centro, tam, color=(255, 240, 160)):
     cx, cy = centro
     t = tam / 2
     a = tam / 7
-    pygame.draw.polygon(sup, color, [(cx, cy - t), (cx + a, cy - a), (cx + t, cy), (cx + a, cy + a),
+    dibujo.polygon(sup, color, [(cx, cy - t), (cx + a, cy - a), (cx + t, cy), (cx + a, cy + a),
                                      (cx, cy + t), (cx - a, cy + a), (cx - t, cy), (cx - a, cy - a)])
 
 
 def corazon(sup, centro, tam, color, borde=BORDE, brillo=True):
     cx, cy = centro
+    if pincel.HAY_SKIA and borde and brillo:
+        t = round(tam * 2) / 2
+        if _pegar(sup, pincel.corazon(t, color, borde), cx - t / 2, cy - t * 0.5):
+            return
     r = tam * 0.27
 
     def forma(c, d=0):
-        pygame.draw.circle(sup, c, (int(cx - r), int(cy - r * 0.35)), int(r + 1 + d))
-        pygame.draw.circle(sup, c, (int(cx + r), int(cy - r * 0.35)), int(r + 1 + d))
-        pygame.draw.polygon(sup, c, [(cx - 2 * r - 0.6 - d, cy - r * 0.15), (cx + 2 * r + 0.6 + d, cy - r * 0.15),
+        dibujo.circle(sup, c, (int(cx - r), int(cy - r * 0.35)), int(r + 1 + d))
+        dibujo.circle(sup, c, (int(cx + r), int(cy - r * 0.35)), int(r + 1 + d))
+        dibujo.polygon(sup, c, [(cx - 2 * r - 0.6 - d, cy - r * 0.15), (cx + 2 * r + 0.6 + d, cy - r * 0.15),
                                      (cx, cy + tam * 0.52 + d * 1.4)])
     if borde:
         forma(borde, 2)
     forma(color)
     if brillo and color != GRIS:
-        pygame.draw.circle(sup, aclarar(color, 0.65), (int(cx - r * 1.1), int(cy - r * 0.7)), max(2, int(r * 0.35)))
+        dibujo.circle(sup, aclarar(color, 0.65), (int(cx - r * 1.1), int(cy - r * 0.7)), max(2, int(r * 0.35)))
 
 
 def estrella(sup, centro, radio, color, borde=None, brillo=True):
     cx, cy = centro
+    if pincel.HAY_SKIA and radio >= 3:
+        r = round(radio * 2) / 2
+        if _pegar(sup, pincel.estrella(r, color, borde), cx - r - 2, cy - r - 2):
+            return
     pts = []
     for i in range(10):
         ang = -math.pi / 2 + i * math.pi / 5
         rr = radio if i % 2 == 0 else radio * 0.5
         pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
     if borde:
-        pygame.draw.polygon(sup, borde, pts, max(2, int(radio / 6)))
-    pygame.draw.polygon(sup, color, pts)
+        dibujo.polygon(sup, borde, pts, max(2, int(radio / 6)))
+    dibujo.polygon(sup, color, pts)
     if borde:
-        pygame.draw.polygon(sup, borde, pts, max(2, int(radio / 8)))
+        dibujo.polygon(sup, borde, pts, max(2, int(radio / 8)))
     if brillo and radio > 8 and color not in (GRIS,):
-        pygame.draw.circle(sup, aclarar(color, 0.7), (int(cx - radio * 0.18), int(cy - radio * 0.25)), max(2, int(radio * 0.16)))
+        dibujo.circle(sup, aclarar(color, 0.7), (int(cx - radio * 0.18), int(cy - radio * 0.25)), max(2, int(radio * 0.16)))
 
 
 def moneda(sup, centro, radio, giro=0.0):
     """Moneda dorada (con giro, para cuando vuela)."""
     cx, cy = centro
+    if pincel.HAY_SKIA and radio >= 3:
+        r = round(radio * 2) / 2
+        pieza, m = pincel.moneda(r)
+        if pieza is not None:
+            k = abs(math.cos(giro))
+            if k > 0.97:
+                sup.blit(pieza, (cx - r - 2 - m, cy - r - 2 - m))
+                return
+            w = max(2, pieza.get_width() * k)
+            sup.blit(dibujo.escalar(pieza, (w, pieza.get_height())), (cx - w / 2, cy - r - 2 - m))
+            return
     ancho = max(3, int(abs(math.cos(giro)) * radio * 2))
     r = pygame.Rect(0, 0, ancho, int(radio * 2))
     r.center = (int(cx), int(cy))
-    pygame.draw.ellipse(sup, SOL_OSC, r.inflate(4, 4))
-    pygame.draw.ellipse(sup, SOL, r)
+    dibujo.ellipse(sup, SOL_OSC, r.inflate(4, 4))
+    dibujo.ellipse(sup, SOL, r)
     if ancho > radio:
-        pygame.draw.ellipse(sup, aclarar(SOL, 0.4), r.inflate(-radio * 0.7, -radio * 0.7), 2)
-        pygame.draw.circle(sup, (255, 250, 220), (int(cx - radio * 0.35), int(cy - radio * 0.4)), max(1, int(radio * 0.2)))
+        dibujo.ellipse(sup, aclarar(SOL, 0.4), r.inflate(-radio * 0.7, -radio * 0.7), 2)
+        dibujo.circle(sup, (255, 250, 220), (int(cx - radio * 0.35), int(cy - radio * 0.4)), max(1, int(radio * 0.2)))
 
 
 def candado(sup, centro, tam, color=SUAVE):
@@ -374,42 +438,42 @@ def candado(sup, centro, tam, color=SUAVE):
     cuerpo.center = (cx, cy + tam * 0.18)
     arco = pygame.Rect(0, 0, int(tam * 0.64), int(tam * 0.8))
     arco.center = (cx, cuerpo.top)
-    pygame.draw.arc(sup, oscurecer(color, 0.8), arco, 0, math.pi, max(3, tam // 6))
-    pygame.draw.rect(sup, color, cuerpo, border_radius=5)
-    pygame.draw.rect(sup, oscurecer(color, 0.75), cuerpo, 2, border_radius=5)
-    pygame.draw.circle(sup, oscurecer(color, 0.6), (int(cx), int(cuerpo.centery - 1)), max(2, tam // 9))
+    dibujo.arc(sup, oscurecer(color, 0.8), arco, 0, math.pi, max(3, tam // 6))
+    dibujo.rect(sup, color, cuerpo, border_radius=5)
+    dibujo.rect(sup, oscurecer(color, 0.75), cuerpo, 2, border_radius=5)
+    dibujo.circle(sup, oscurecer(color, 0.6), (int(cx), int(cuerpo.centery - 1)), max(2, tam // 9))
 
 
 def tilde(sup, centro, tam, color, grosor=4):
     cx, cy = centro
-    pygame.draw.lines(sup, color, False, [(cx - tam * 0.45, cy), (cx - tam * 0.1, cy + tam * 0.35),
+    dibujo.lines(sup, color, False, [(cx - tam * 0.45, cy), (cx - tam * 0.1, cy + tam * 0.35),
                                           (cx + tam * 0.5, cy - tam * 0.35)], grosor)
 
 
 def cruz(sup, centro, tam, color, grosor=4):
     cx, cy = centro
     d = tam * 0.38
-    pygame.draw.line(sup, color, (cx - d, cy - d), (cx + d, cy + d), grosor)
-    pygame.draw.line(sup, color, (cx - d, cy + d), (cx + d, cy - d), grosor)
+    dibujo.line(sup, color, (cx - d, cy - d), (cx + d, cy + d), grosor)
+    dibujo.line(sup, color, (cx - d, cy + d), (cx + d, cy - d), grosor)
 
 
 def triangulo(sup, centro, tam, color, direccion=1):
     """Flechita hacia la derecha (1) o la izquierda (-1)."""
     cx, cy = centro
-    pygame.draw.polygon(sup, color, [(cx - tam * 0.4 * direccion, cy - tam * 0.5),
+    dibujo.polygon(sup, color, [(cx - tam * 0.4 * direccion, cy - tam * 0.5),
                                      (cx + tam * 0.5 * direccion, cy), (cx - tam * 0.4 * direccion, cy + tam * 0.5)])
 
 
 def parlante(sup, centro, tam, color, activo=True):
     cx, cy = centro
-    pygame.draw.rect(sup, color, (cx - tam * 0.5, cy - tam * 0.18, tam * 0.3, tam * 0.36), border_radius=2)
-    pygame.draw.polygon(sup, color, [(cx - tam * 0.3, cy - tam * 0.18), (cx, cy - tam * 0.45),
+    dibujo.rect(sup, color, (cx - tam * 0.5, cy - tam * 0.18, tam * 0.3, tam * 0.36), border_radius=2)
+    dibujo.polygon(sup, color, [(cx - tam * 0.3, cy - tam * 0.18), (cx, cy - tam * 0.45),
                                      (cx, cy + tam * 0.45), (cx - tam * 0.3, cy + tam * 0.18)])
     if activo:
         for k, rr in enumerate((0.25, 0.42)):
             r = pygame.Rect(0, 0, tam * rr * 2, tam * rr * 2)
             r.center = (cx + tam * 0.02, cy)
-            pygame.draw.arc(sup, color, r, -0.9, 0.9, 3)
+            dibujo.arc(sup, color, r, -0.9, 0.9, 3)
     else:
         cruz(sup, (cx + tam * 0.3, cy), tam * 0.45, color, 3)
 
@@ -418,6 +482,10 @@ def globo(sup, rect, punta, color=TARJETA, borde=BORDE, grosor=3, radio=20):
     """Globito de diálogo con la colita apuntando a 'punta' (la boca del gato)."""
     rect = pygame.Rect(rect)
     px, py = punta
+    if pincel.HAY_SKIA and len(color) == 3 and _pegar(
+            sup, pincel.globo(rect.width, rect.height, (px - rect.x, py - rect.y), color, borde, grosor, radio),
+            rect.x, rect.y):
+        return
     bx = max(rect.left + radio + 10, min(rect.right - radio - 40, px + 30))
     base_y = rect.bottom - 2 if py > rect.bottom else rect.top + 2
     if px < rect.left:
@@ -426,31 +494,33 @@ def globo(sup, rect, punta, color=TARJETA, borde=BORDE, grosor=3, radio=20):
         tri = [(rect.left + 2, cy - 14), (rect.left + 2, cy + 14), (px, py)]
     else:
         tri = [(bx - 16, base_y), (bx + 16, base_y), (px, py)]
-    pygame.draw.rect(sup, oscurecer(color, 0.85), rect.move(0, 5), border_radius=radio)
-    pygame.draw.polygon(sup, borde, tri, grosor * 2)
-    pygame.draw.rect(sup, color, rect, border_radius=radio)
-    pygame.draw.polygon(sup, color, tri)
-    pygame.draw.rect(sup, borde, rect, grosor, border_radius=radio)
+    dibujo.rect(sup, oscurecer(color, 0.85), rect.move(0, 5), border_radius=radio)
+    dibujo.polygon(sup, borde, tri, grosor * 2)
+    dibujo.rect(sup, color, rect, border_radius=radio)
+    dibujo.polygon(sup, color, tri)
+    dibujo.rect(sup, borde, rect, grosor, border_radius=radio)
     # tapar el borde donde se une la colita
     if px < rect.left:
-        pygame.draw.line(sup, color, (rect.left + 1, tri[0][1] + 3), (rect.left + 1, tri[1][1] - 3), grosor + 2)
+        dibujo.line(sup, color, (rect.left + 1, tri[0][1] + 3), (rect.left + 1, tri[1][1] - 3), grosor + 2)
     else:
-        pygame.draw.line(sup, color, (tri[0][0] + 3, base_y - 1), (tri[1][0] - 3, base_y - 1), grosor + 2)
+        dibujo.line(sup, color, (tri[0][0] + 3, base_y - 1), (tri[1][0] - 3, base_y - 1), grosor + 2)
 
 
 def tabla_madera(sup, rect, radio=10, color=MADERA):
     """Cartel de madera con vetas."""
     rect = pygame.Rect(rect)
-    pygame.draw.rect(sup, MADERA_OSC, rect.move(0, 5), border_radius=radio)
-    pygame.draw.rect(sup, color, rect, border_radius=radio)
+    if pincel.HAY_SKIA and _pegar(sup, pincel.madera(rect.width, rect.height, radio, color), rect.x, rect.y):
+        return
+    dibujo.rect(sup, MADERA_OSC, rect.move(0, 5), border_radius=radio)
+    dibujo.rect(sup, color, rect, border_radius=radio)
     vetas = oscurecer(color, 0.88)
     n = max(1, rect.height // 18)
     for k in range(1, n + 1):
         y = rect.top + k * rect.height / (n + 1)
-        pygame.draw.line(sup, vetas, (rect.left + 14, y), (rect.right - 14, y), 2)
+        dibujo.line(sup, vetas, (rect.left + 14, y), (rect.right - 14, y), 2)
     for x in (rect.left + 12, rect.right - 12):
-        pygame.draw.circle(sup, MADERA_OSC, (x, rect.top + 12), 3)
-    pygame.draw.rect(sup, MADERA_OSC, rect, 3, border_radius=radio)
+        dibujo.circle(sup, MADERA_OSC, (x, rect.top + 12), 3)
+    dibujo.rect(sup, MADERA_OSC, rect, 3, border_radius=radio)
 
 
 # ------------------------------------------------------------ botón
@@ -478,16 +548,20 @@ class Boton:
         self.relieve = relieve
         self.t_apretado = -10.0
         self.encima_antes = False
-        if isinstance(contenido, pygame.Surface):
+        if isinstance(contenido, (pygame.Surface, Lienzo)):
             self.sup = contenido
         else:
             if negrita and "$" not in contenido and "**" not in contenido:
                 contenido = f"**{contenido}**"
             self.sup = rico(contenido, tam, color_texto, ancho=self.rect.width - 28, color_negrita=color_texto)
         self.sup = escalar_a(self.sup, self.rect.width - 24)
+        if pincel.HAY_SKIA:   # se pinta ya (al armar la pantalla) para que no aparezca de golpe distinto
+            with pincel.siempre():
+                pincel.boton(self.rect.width, self.rect.height,
+                             self.color if habilitado else (232, 224, 210), radio, relieve, "normal")
         if self.sup.get_height() > self.rect.height - 10:
             k = (self.rect.height - 10) / self.sup.get_height()
-            self.sup = pygame.transform.smoothscale(
+            self.sup = dibujo.escalar(
                 self.sup, (max(1, int(self.sup.get_width() * k)), max(1, int(self.sup.get_height() * k))))
 
     def marcar(self, estado):
@@ -517,7 +591,7 @@ class Boton:
     def dibujar(self, sup, dx=0, dy=0):
         ahora = _ahora()
         rect = self.rect.move(dx, dy)
-        encima = self.habilitado and rect.collidepoint(pygame.mouse.get_pos())
+        encima = self.habilitado and rect.collidepoint(dibujo.raton())
         apretado = ahora - self.t_apretado < 0.12
         color = self.color
         borde = oscurecer(self.color, 0.62)
@@ -527,6 +601,7 @@ class Boton:
             color, borde = ROSA, ROSA_OSC
         elif not self.habilitado:
             color, borde = (232, 224, 210), (200, 188, 170)
+        color_base = color
         if encima and not apretado:
             color = aclarar(color, 0.25)
         sacudir = 0
@@ -540,27 +615,38 @@ class Boton:
         hundir = relieve - 1 if apretado else (-2 if encima else 0)
         cara = rect.move(sacudir, hundir + salto)
         base = rect.move(sacudir, relieve + salto)
-        pygame.draw.rect(sup, borde, base.inflate(4, 4), border_radius=self.radio + 2)
-        pygame.draw.rect(sup, oscurecer(color, 0.8), base, border_radius=self.radio)
-        pygame.draw.rect(sup, borde, cara.inflate(4, 4), border_radius=self.radio + 2)
-        pygame.draw.rect(sup, color, cara, border_radius=self.radio)
-        # brillo de arriba
-        brillo = pygame.Rect(cara.left + 8, cara.top + 4, cara.width - 16, max(4, cara.height // 5))
-        pygame.draw.rect(sup, aclarar(color, 0.45), brillo, border_radius=self.radio // 2 + 2)
+        estado = "apretado" if apretado else ("encima" if encima else "normal")
+        pieza = None
+        if pincel.HAY_SKIA:
+            pieza, m = pincel.boton(rect.width, rect.height, color_base,
+                                    self.radio, relieve, estado)
+        if pieza is not None:
+            sup.blit(pieza, (rect.x + sacudir - m, rect.y + salto - m))
+        else:
+            self._dibujar_simple(sup, color, borde, cara, base)
         contenido = self.sup
         if not self.habilitado and self.marcado is None:
             contenido = contenido.copy()
             contenido.set_alpha(110)
         sup.blit(contenido, contenido.get_rect(center=(cara.centerx, cara.centery + 1)))
         if self.marcado == "bien":
-            pygame.draw.circle(sup, MENTA_OSC, (cara.right - 20, cara.top + 18), 12)
+            dibujo.circle(sup, MENTA_OSC, (cara.right - 20, cara.top + 18), 12)
             tilde(sup, (cara.right - 20, cara.top + 18), 13, TARJETA, 3)
         elif self.marcado == "mal":
-            pygame.draw.circle(sup, ROSA_OSC, (cara.right - 20, cara.top + 18), 12)
+            dibujo.circle(sup, ROSA_OSC, (cara.right - 20, cara.top + 18), 12)
             cruz(sup, (cara.right - 20, cara.top + 18), 15, TARJETA, 3)
         if self.etiqueta_tecla:
             et = texto(self.etiqueta_tecla, 14, oscurecer(color, 0.5), negrita=True)
             sup.blit(et, (cara.left + 12, cara.top + 7))
+
+    def _dibujar_simple(self, sup, color, borde, cara, base):
+        dibujo.rect(sup, borde, base.inflate(4, 4), border_radius=self.radio + 2)
+        dibujo.rect(sup, oscurecer(color, 0.8), base, border_radius=self.radio)
+        dibujo.rect(sup, borde, cara.inflate(4, 4), border_radius=self.radio + 2)
+        dibujo.rect(sup, color, cara, border_radius=self.radio)
+        # brillo de arriba
+        brillo = pygame.Rect(cara.left + 8, cara.top + 4, cara.width - 16, max(4, cara.height // 5))
+        dibujo.rect(sup, aclarar(color, 0.45), brillo, border_radius=self.radio // 2 + 2)
 
 
 # ------------------------------------------------------------ cuadro de texto
@@ -685,13 +771,13 @@ class CampoTexto:
 
     def dibujar(self, sup):
         r = self.rect
-        pygame.draw.rect(sup, (255, 255, 255), r, border_radius=14)
-        pygame.draw.rect(sup, (236, 230, 218), (r.left + 4, r.top + 3, r.width - 8, 6), border_radius=3)
+        dibujo.rect(sup, (255, 255, 255), r, border_radius=14)
+        dibujo.rect(sup, (236, 230, 218), (r.left + 4, r.top + 3, r.width - 8, 6), border_radius=3)
         borde = LAVANDA_OSC if self.habilitado else GRIS
         if self.habilitado:
             brillo = 0.5 + 0.5 * math.sin(self.t * 3)
-            pygame.draw.rect(sup, aclarar(LAVANDA, 0.3 + 0.3 * brillo), r.inflate(10, 10), 4, border_radius=18)
-        pygame.draw.rect(sup, borde, r, 3, border_radius=14)
+            dibujo.rect(sup, aclarar(LAVANDA, 0.3 + 0.3 * brillo), r.inflate(10, 10), 4, border_radius=18)
+        dibujo.rect(sup, borde, r, 3, border_radius=14)
         f = fuente(30, negrita=True) if self.fredoka else fuente(26, mono=True)
         interior = self.rect.inflate(-32, 0)
         ancho_cursor = f.size(self.texto[:self.cursor])[0]
@@ -719,14 +805,14 @@ class CampoTexto:
                 color = ROSA_OSC if p < 0 else COLORES_PARENTESIS[p % len(COLORES_PARENTESIS)]
                 xk = x0 + f.size(self.texto[:i])[0]
                 fondo = (255, 230, 150) if i in resaltados else (255, 255, 255)
-                pygame.draw.rect(sup, fondo, (xk, y0 + 2, ancho_car, s.get_height() - 4), border_radius=4)
+                dibujo.rect(sup, fondo, (xk, y0 + 2, ancho_car, s.get_height() - 4), border_radius=4)
                 sup.blit(negrita.render(self.texto[i], True, color), (xk, y0))
         else:
             s = f.render(self.placeholder, True, GRIS)
             sup.blit(s, (interior.left, self.rect.centery - s.get_height() // 2))
         if self.habilitado and (self.t % 1.0) < 0.6:
             cx = interior.left + ancho_cursor - self.desplazamiento
-            pygame.draw.line(sup, LAVANDA_OSC, (cx, self.rect.centery - 15), (cx, self.rect.centery + 15), 3)
+            dibujo.line(sup, LAVANDA_OSC, (cx, self.rect.centery - 15), (cx, self.rect.centery + 15), 3)
         sup.set_clip(clip)
 
 
@@ -736,7 +822,7 @@ _CACHE_GRAF = {}
 
 def grafico(spec, tam=300):
     """Dibuja la región de integración con matplotlib y la devuelve como superficie."""
-    clave = (tuple(sorted((k, str(v)) for k, v in spec.items())), tam)
+    clave = (tuple(sorted((k, str(v)) for k, v in spec.items())), tam, escala())
     if clave in _CACHE_GRAF:
         return _CACHE_GRAF[clave]
     import matplotlib.patches  # noqa: F401
@@ -747,7 +833,7 @@ def grafico(spec, tam=300):
     from .mate import tex, x
 
     relleno, borde, tinta = "#d9cdf7", "#7058c4", "#343048"
-    fig = Figure(figsize=(tam / 100, tam / 100), dpi=100)
+    fig = Figure(figsize=(tam / 100, tam / 100), dpi=100 * escala())
     fig.patch.set_alpha(0)
     ax = fig.add_axes([0.15, 0.15, 0.79, 0.80])
     tipo = spec["tipo"]
@@ -798,10 +884,11 @@ def grafico(spec, tam=300):
     canvas = FigureCanvasAgg(fig)
     canvas.draw()
     w, h = canvas.get_width_height()
-    img = pygame.image.frombuffer(bytes(canvas.buffer_rgba()), (w, h), "RGBA").copy()
-    tarjeta = pygame.Surface((w + 16, h + 16), pygame.SRCALPHA)
-    pygame.draw.rect(tarjeta, (226, 220, 214), tarjeta.get_rect().move(0, 3), border_radius=16)
-    pygame.draw.rect(tarjeta, TARJETA, tarjeta.get_rect().inflate(0, -3).move(0, -1), border_radius=16)
+    img = Lienzo.desde(pygame.image.frombuffer(bytes(canvas.buffer_rgba()), (w, h), "RGBA").copy())
+    w, h = img.get_size()
+    tarjeta = Lienzo(*((w + 16, h + 16)))
+    dibujo.rect(tarjeta, (226, 220, 214), tarjeta.get_rect().move(0, 3), border_radius=16)
+    dibujo.rect(tarjeta, TARJETA, tarjeta.get_rect().inflate(0, -3).move(0, -1), border_radius=16)
     tarjeta.blit(img, (8, 6))
     _CACHE_GRAF[clave] = tarjeta
     return tarjeta
@@ -816,9 +903,9 @@ def engranaje(sup, centro, tam, color=BORDE):
         a = k * math.tau / 32
         r = r_ext if (k // 2) % 2 == 0 else r_int
         pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
-    pygame.draw.polygon(sup, color, pts)
-    pygame.draw.circle(sup, color, (cx, cy), r_int)
-    pygame.draw.circle(sup, ARENA, (cx, cy), tam * 0.16)
+    dibujo.polygon(sup, color, pts)
+    dibujo.circle(sup, color, (cx, cy), r_int)
+    dibujo.circle(sup, ARENA, (cx, cy), tam * 0.16)
 
 
 class Interruptor:
@@ -844,11 +931,11 @@ class Interruptor:
         self.anim += (objetivo - self.anim) * 0.3
         r = self.rect
         color = tuple(int(a + (b - a) * self.anim) for a, b in zip((214, 200, 180), PASTO))
-        pygame.draw.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
-        pygame.draw.rect(sup, color, r, border_radius=r.height)
+        dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
+        dibujo.rect(sup, color, r, border_radius=r.height)
         x = r.left + r.height / 2 + self.anim * (r.width - r.height)
-        pygame.draw.circle(sup, BORDE, (x, r.centery + 2), r.height / 2 + 1)
-        pygame.draw.circle(sup, TARJETA, (x, r.centery), r.height / 2 - 2)
+        dibujo.circle(sup, BORDE, (x, r.centery + 2), r.height / 2 + 1)
+        dibujo.circle(sup, TARJETA, (x, r.centery), r.height / 2 - 2)
         t = texto("SÍ" if self.valor else "NO", 14, BORDE, negrita=True)
         tx = r.left + 12 if self.valor else r.right - 12 - t.get_width()
         sup.blit(t, (tx, r.centery - t.get_height() // 2))
@@ -887,11 +974,11 @@ class Deslizador:
 
     def dibujar(self, sup):
         r = self.rect
-        pygame.draw.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
-        pygame.draw.rect(sup, (236, 222, 196), r, border_radius=r.height)
+        dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
+        dibujo.rect(sup, (236, 222, 196), r, border_radius=r.height)
         lleno = pygame.Rect(r.left, r.top, max(r.height, int(r.width * self.valor)), r.height)
-        pygame.draw.rect(sup, MAR if self.habilitado else GRIS, lleno, border_radius=r.height)
+        dibujo.rect(sup, MAR if self.habilitado else GRIS, lleno, border_radius=r.height)
         x = r.left + r.width * self.valor
-        pygame.draw.circle(sup, BORDE, (x, r.centery + 2), r.height + 3)
-        pygame.draw.circle(sup, SOL if self.habilitado else GRIS, (x, r.centery), r.height + 1)
-        pygame.draw.circle(sup, aclarar(SOL, 0.6), (x - 3, r.centery - 3), 3)
+        dibujo.circle(sup, BORDE, (x, r.centery + 2), r.height + 3)
+        dibujo.circle(sup, SOL if self.habilitado else GRIS, (x, r.centery), r.height + 1)
+        dibujo.circle(sup, aclarar(SOL, 0.6), (x - 3, r.centery - 3), 3)

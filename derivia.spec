@@ -11,7 +11,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=datos,
-    hiddenimports=["mpmath", "juego.app"],
+    hiddenimports=["mpmath", "juego.app", "skia"],
     excludes=["tkinter", "IPython", "PyQt5", "PyQt6", "PySide2", "PySide6", "wx", "pytest",
               "notebook", "jupyter", "pandas", "scipy"],
     noarchive=False,

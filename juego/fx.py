@@ -6,6 +6,7 @@ import random
 import pygame
 
 from . import ui
+from . import lienzo as dibujo
 
 COLORES_CONFETI = [(250, 124, 104), (255, 204, 77), (64, 182, 196), (122, 196, 106), (247, 152, 60),
                    (186, 150, 236), (255, 255, 255)]
@@ -55,7 +56,7 @@ class Confeti:
         ancho = abs(math.cos(math.radians(self.ang))) * self.w + 1
         r = pygame.Rect(0, 0, ancho, self.h)
         r.center = (self.x, self.y)
-        pygame.draw.rect(sup, self.color, r, border_radius=2)
+        dibujo.rect(sup, self.color, r, border_radius=2)
 
 
 class Chispa:
@@ -101,7 +102,7 @@ class TextoFlotante:
         esc = 0.7 + 0.3 * suave(self.t / 0.35)
         s = self.sup
         if esc != 1:
-            s = pygame.transform.smoothscale(s, (max(1, int(s.get_width() * esc)), max(1, int(s.get_height() * esc))))
+            s = dibujo.escalar(s, (max(1, int(s.get_width() * esc)), max(1, int(s.get_height() * esc))))
         s = s.copy()
         s.set_alpha(int(255 * (1 - suave((k - 0.6) / 0.4))))
         sup.blit(s, s.get_rect(center=(self.x, self.y0 - self.sube * suave(k))))
@@ -150,7 +151,7 @@ class Gota:
         self.vida -= dt
 
     def dibujar(self, sup):
-        pygame.draw.line(sup, (140, 190, 220), (self.x, self.y), (self.x - 3, self.y + 12), 2)
+        dibujo.line(sup, (140, 190, 220), (self.x, self.y), (self.x - 3, self.y + 12), 2)
 
 
 class Efectos:
@@ -217,7 +218,7 @@ class Fueguito:
             k = t / vida
             r = (4 * (1 - k) + 1) * e
             color = (255, 236, 140) if k < 0.4 else ((255, 170, 60) if k < 0.7 else (236, 90, 50))
-            pygame.draw.circle(sup, color, (bx + x * e, by - 26 * e + y * e * 0.6), r)
+            dibujo.circle(sup, color, (bx + x * e, by - 26 * e + y * e * 0.6), r)
         # la llama (forma de gota que titila)
 
         def llama(ancho, alto, dy=0):
@@ -226,7 +227,7 @@ class Fueguito:
                     (bx - ancho * 0.5 * e, by - alto * 0.75 * e + dy), punta,
                     (bx + ancho * 0.55 * e, by - alto * 0.72 * e + dy), (bx + ancho * 1.15 * e, by - alto * 0.42 * e + dy),
                     (bx + ancho * e, by - 4 * e + dy), (bx, by + 3 * e + dy)]
-        pygame.draw.polygon(sup, (92, 50, 30), llama(13.5, 34))
-        pygame.draw.polygon(sup, (240, 96, 50), llama(11, 30))
-        pygame.draw.polygon(sup, (255, 170, 60), llama(7.5, 22))
-        pygame.draw.polygon(sup, (255, 236, 140), llama(4, 13))
+        dibujo.polygon(sup, (92, 50, 30), llama(13.5, 34))
+        dibujo.polygon(sup, (240, 96, 50), llama(11, 30))
+        dibujo.polygon(sup, (255, 170, 60), llama(7.5, 22))
+        dibujo.polygon(sup, (255, 236, 140), llama(4, 13))

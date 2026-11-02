@@ -103,6 +103,10 @@ juego/gen_multiples.py   integrales dobles y triples (mundos 8 y 9)
 juego/mundos.py       la lista de mundos y niveles
 juego/escenas.py      pantallas (menú, mapa, nivel, resultados, cuaderno, ayuda)
 juego/ui.py           dibujo: colores, tipografías, fórmulas, botones, cuadro de texto
+juego/lienzo.py       todo se piensa en 1280×720 pero se dibuja a la resolución real de tu pantalla
+juego/pincel.py       piezas dibujadas con Skia (el motor gráfico de Chrome): botones, paneles, islas,
+                      palmeras, globitos... con degradés, brillos y sombras suaves. Si Skia no está,
+                      el juego usa dibujos más simples y anda igual.
 juego/gato.py         el gato (dibujado con formas) y sus animaciones
 juego/paisaje.py      cielo, mar, islas, palmeras y el pergamino de fondo
 juego/fx.py           confeti, chispas, monedas que vuelan, fueguito
@@ -112,6 +116,17 @@ tests/                pruebas: genera cientos de ejercicios y verifica que todo 
 ```
 
 Para correr las pruebas: `python tests/test_ejercicios.py`
+
+## Gráficos
+
+Derivia usa dos motores juntos:
+
+- **pygame-ce** arma la pantalla 60 veces por segundo (rápido).
+- **Skia** (`pip install skia-python`) pinta una sola vez las piezas lindas (botones, islas,
+  paneles, monedas, estrellas) y quedan guardadas. Así se ve prolijo sin trabarse.
+
+Todo se dibuja a la resolución real de tu monitor (en Full HD, 2K o 4K se ve nítido) y el juego
+le avisa a Windows que maneja él la escala, para que Windows no lo estire y lo vuelva borroso.
 
 ## Créditos
 

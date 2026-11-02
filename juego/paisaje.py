@@ -6,19 +6,27 @@ import random
 import numpy as np
 import pygame
 
-from . import ui
+from . import pincel, ui
+from . import lienzo as dibujo
+from .lienzo import Lienzo
 from .ui import ALTO, ANCHO
 
 _CACHE = {}
 
 
-def _gradiente(w, h, arriba, abajo):
-    sup = pygame.Surface((w, h))
-    for y in range(h):
-        k = y / max(1, h - 1)
-        c = [int(a + (b - a) * k) for a, b in zip(arriba, abajo)]
-        pygame.draw.line(sup, c, (0, y), (w, y))
-    return sup
+def gradiente(w, h, arriba, abajo):
+    """Degradé vertical, pintado fila por fila a la resolución real (sin bandas)."""
+    lz = Lienzo(w, h, alfa=False)
+    H = lz.sup.get_height()
+    col = np.linspace(0, 1, H)[:, None]
+    filas = (np.array(arriba, float)[None, :] * (1 - col) + np.array(abajo, float)[None, :] * col).astype(np.uint8)
+    px = pygame.surfarray.pixels3d(lz.sup)
+    px[:, :, :] = filas[None, :, :]
+    del px
+    return lz
+
+
+_gradiente = gradiente
 
 
 def nube(escala=1.0, semilla=0, tinte=None):
@@ -31,14 +39,19 @@ def nube(escala=1.0, semilla=0, tinte=None):
         return _CACHE[clave]
     rng = random.Random(semilla)
     w, h = int(220 * escala), int(100 * escala)
-    s = pygame.Surface((w, h), pygame.SRCALPHA)
+    with pincel.siempre():
+        pieza, _m = pincel.nube(w, h, semilla) if pincel.HAY_SKIA else (None, 0)
+    if pieza is not None:
+        _CACHE[clave] = pieza
+        return pieza
+    s = Lienzo(*((w, h)))
     bolas = [(0.25, 0.62, 0.22), (0.45, 0.45, 0.3), (0.68, 0.55, 0.25), (0.82, 0.68, 0.17), (0.12, 0.72, 0.14)]
     for bx, by, br in bolas:
         bx += rng.uniform(-0.03, 0.03)
-        pygame.draw.circle(s, (214, 234, 244), (bx * w, by * h + 5 * escala), br * w)
+        dibujo.circle(s, (214, 234, 244), (bx * w, by * h + 5 * escala), br * w)
     for bx, by, br in bolas:
-        pygame.draw.circle(s, (255, 255, 255), (bx * w, by * h), br * w)
-    pygame.draw.rect(s, (0, 0, 0, 0), (0, h * 0.86, w, h))
+        dibujo.circle(s, (255, 255, 255), (bx * w, by * h), br * w)
+    dibujo.rect(s, (0, 0, 0, 0), (0, h * 0.86, w, h))
     _CACHE[clave] = s
     return s
 
@@ -65,26 +78,20 @@ class Cielo:
         sup.blit(self.fondo, (0, 0))
         for x, y, fase, r in self.estrellas:
             brillo = 0.5 + 0.5 * math.sin(self.t * 2 + fase)
-            pygame.draw.circle(sup, (255, 250, 220), (x, y), r * (0.6 + 0.4 * brillo))
+            dibujo.circle(sup, (255, 250, 220), (x, y), r * (0.6 + 0.4 * brillo))
         astro = self.tema.get("astro", "sol")
         if sol and astro == "luna":
             c = (ANCHO - 160, 110)
-            for k, alfa in ((90, 30), (72, 50)):
-                halo = pygame.Surface((k * 2, k * 2), pygame.SRCALPHA)
-                pygame.draw.circle(halo, (240, 240, 220, alfa), (k, k), k)
-                sup.blit(halo, (c[0] - k, c[1] - k))
-            pygame.draw.circle(sup, (246, 244, 226), c, 52)
+            _halo(sup, c, 110, (240, 240, 220), 70)
+            dibujo.circle(sup, (246, 244, 226), c, 52)
             for dx, dy, r in ((-16, -10, 10), (14, 12, 7), (10, -20, 5), (-6, 22, 6)):
-                pygame.draw.circle(sup, (222, 220, 200), (c[0] + dx, c[1] + dy), r)
+                dibujo.circle(sup, (222, 220, 200), (c[0] + dx, c[1] + dy), r)
             sol = False
         elif sol and astro == "sol_bajo":
             c = (ANCHO - 230, 250)
-            for k, alfa in ((130, 40), (100, 60)):
-                halo = pygame.Surface((k * 2, k * 2), pygame.SRCALPHA)
-                pygame.draw.circle(halo, (255, 200, 120, alfa), (k, k), k)
-                sup.blit(halo, (c[0] - k, c[1] - k))
-            pygame.draw.circle(sup, (255, 160, 90), c, 74)
-            pygame.draw.circle(sup, (255, 196, 120), (c[0] - 20, c[1] - 22), 18)
+            _halo(sup, c, 170, (255, 200, 120), 110)
+            dibujo.circle(sup, (255, 160, 90), c, 74)
+            dibujo.circle(sup, (255, 196, 120), (c[0] - 20, c[1] - 22), 18)
             sol = False
         elif astro == "ninguno":
             sol = False
@@ -95,13 +102,29 @@ class Cielo:
                 p1 = (sol_c[0] + math.cos(a) * 64, sol_c[1] + math.sin(a) * 64)
                 p2 = (sol_c[0] + math.cos(a + 0.12) * 96, sol_c[1] + math.sin(a + 0.12) * 96)
                 p3 = (sol_c[0] + math.cos(a - 0.12) * 96, sol_c[1] + math.sin(a - 0.12) * 96)
-                pygame.draw.polygon(sup, (255, 236, 160), [p1, p2, p3])
-            pygame.draw.circle(sup, (255, 226, 120), sol_c, 62)
-            pygame.draw.circle(sup, ui.SOL, sol_c, 54)
-            pygame.draw.circle(sup, (255, 240, 180), (sol_c[0] - 18, sol_c[1] - 18), 14)
+                dibujo.polygon(sup, (255, 236, 160), [p1, p2, p3])
+            pieza, m = pincel.sol(58) if pincel.HAY_SKIA else (None, 0)
+            if pieza is not None:
+                sup.blit(pieza, (sol_c[0] - 60 - m, sol_c[1] - 60 - m))
+            else:
+                dibujo.circle(sup, (255, 226, 120), sol_c, 62)
+                dibujo.circle(sup, ui.SOL, sol_c, 54)
+                dibujo.circle(sup, (255, 240, 180), (sol_c[0] - 18, sol_c[1] - 18), 14)
         tinte = self.tema.get("nubes")
         for x, y, esc, _, sem in self.nubes:
             sup.blit(nube(esc, sem, tinte), (x, y))
+
+
+def _halo(sup, c, r, color, a):
+    pieza = pincel.brillo_suave(r, color, a) if pincel.HAY_SKIA else None
+    if pieza is None:
+        pieza = _CACHE.get(("halo", r, color, a, dibujo.escala()))
+        if pieza is None:
+            pieza = Lienzo(2 * r, 2 * r)
+            for k in range(6):
+                dibujo.circle(pieza, color + (a // 6,), (r, r), r * (1 - k / 7))
+            _CACHE[("halo", r, color, a, dibujo.escala())] = pieza
+    sup.blit(pieza, (c[0] - r, c[1] - r))
 
 
 class Mar:
@@ -125,16 +148,21 @@ class Mar:
                 yy = base + math.sin(x / (70 + 15 * k) + fase) * amp + math.sin(x / 31 + fase * 1.7) * 2
                 pts.append((x, yy))
             pts.append((hasta, ALTO))
-            pygame.draw.polygon(sup, color, pts)
+            dibujo.polygon(sup, color, pts)
             # espuma
             espuma = [(x, base + math.sin(x / (70 + 15 * k) + fase) * amp + math.sin(x / 31 + fase * 1.7) * 2)
                       for x in range(desde, hasta + 21, 20)]
             if len(espuma) > 1:
-                pygame.draw.lines(sup, ui.aclarar(color, 0.55), False, espuma, 3)
+                dibujo.lines(sup, ui.aclarar(color, 0.55), False, espuma, 3)
 
 
 def palmera(sup, base, alto=110, inclina=0.25, escala=1.0):
     bx, by = base
+    if pincel.HAY_SKIA:
+        pieza, (ax, ay) = pincel.palmera(alto, inclina, escala)
+        if pieza is not None:
+            sup.blit(pieza, (bx - ax, by - ay))
+            return
     alto *= escala
     pts = []
     for i in range(9):
@@ -143,10 +171,10 @@ def palmera(sup, base, alto=110, inclina=0.25, escala=1.0):
     # tronco
     for i in range(len(pts) - 1):
         ancho = (12 - i * 0.8) * escala
-        pygame.draw.line(sup, ui.BORDE, pts[i], pts[i + 1], int(ancho + 4))
+        dibujo.line(sup, ui.BORDE, pts[i], pts[i + 1], int(ancho + 4))
     for i in range(len(pts) - 1):
         ancho = (12 - i * 0.8) * escala
-        pygame.draw.line(sup, (196, 140, 82) if i % 2 == 0 else (176, 120, 66), pts[i], pts[i + 1], int(ancho))
+        dibujo.line(sup, (196, 140, 82) if i % 2 == 0 else (176, 120, 66), pts[i], pts[i + 1], int(ancho))
     copa = pts[-1]
     # hojas
     for k, ang in enumerate((-2.7, -2.1, -1.4, -0.7, -0.1, 0.5)):
@@ -156,13 +184,13 @@ def palmera(sup, base, alto=110, inclina=0.25, escala=1.0):
         medio = (copa[0] + math.cos(a) * largo * 0.5, copa[1] + math.sin(a) * largo * 0.5 - 10 * escala)
         nx, ny = -math.sin(a) * 12 * escala, math.cos(a) * 12 * escala
         hoja = [copa, (medio[0] + nx, medio[1] + ny), p_fin, (medio[0] - nx, medio[1] - ny)]
-        pygame.draw.polygon(sup, ui.BORDE, hoja)
+        dibujo.polygon(sup, ui.BORDE, hoja)
         hoja_in = [copa, (medio[0] + nx * 0.7, medio[1] + ny * 0.7), p_fin, (medio[0] - nx * 0.7, medio[1] - ny * 0.7)]
-        pygame.draw.polygon(sup, ui.PASTO if k % 2 else (100, 176, 90), hoja_in)
-        pygame.draw.line(sup, ui.PASTO_OSC, copa, p_fin, 2)
+        dibujo.polygon(sup, ui.PASTO if k % 2 else (100, 176, 90), hoja_in)
+        dibujo.line(sup, ui.PASTO_OSC, copa, p_fin, 2)
     for dx in (-6, 5):
-        pygame.draw.circle(sup, ui.BORDE, (copa[0] + dx * escala, copa[1] + 6 * escala), 7 * escala)
-        pygame.draw.circle(sup, (140, 90, 50), (copa[0] + dx * escala, copa[1] + 6 * escala), 5 * escala)
+        dibujo.circle(sup, ui.BORDE, (copa[0] + dx * escala, copa[1] + 6 * escala), 7 * escala)
+        dibujo.circle(sup, (140, 90, 50), (copa[0] + dx * escala, copa[1] + 6 * escala), 5 * escala)
 
 
 def _blob(cx, cy, rx, ry, rng, puntos=40, rugosidad=0.08):
@@ -198,26 +226,40 @@ def isla(w, h, color_pasto=ui.PASTO, semilla=0, palmeras=3, palmeras_borde=False
     clave = ("isla", w, h, color_pasto, semilla, palmeras, palmeras_borde, deco, orilla, tinte)
     if clave in _CACHE:
         return _CACHE[clave]
+    with pincel.siempre():
+        _CACHE[clave] = _armar_isla(w, h, color_pasto, semilla, palmeras, palmeras_borde, deco, orilla, tinte)
+    return _CACHE[clave]
+
+
+def _armar_isla(w, h, color_pasto, semilla, palmeras, palmeras_borde, deco, orilla, tinte):
     rng = random.Random(semilla)
     # margen alrededor para que las palmeras no se corten
-    s = pygame.Surface((w + 2 * MARGEN_X, h + MARGEN_Y), pygame.SRCALPHA)
+    s = Lienzo(*((w + 2 * MARGEN_X, h + MARGEN_Y)))
     cx, cy = w / 2 + MARGEN_X, h * 0.55 + MARGEN_Y
     # sombra en el agua y orilla
-    pygame.draw.polygon(s, orilla or (90, 196, 206), _blob(cx, cy + 14, w * 0.49, h * 0.42, rng))
+    agua = _blob(cx, cy + 14, w * 0.49, h * 0.42, rng)
     rng2 = random.Random(semilla)
     arena = _blob(cx, cy, w * 0.47, h * 0.4, rng2)
-    pygame.draw.polygon(s, ui.BORDE, arena)
-    pygame.draw.polygon(s, ui.ARENA, _blob(cx, cy, w * 0.47 - 3, h * 0.4 - 3, random.Random(semilla)))
     pasto = _blob(cx, cy - h * 0.04, w * 0.39, h * 0.3, random.Random(semilla + 1), rugosidad=0.1)
-    pygame.draw.polygon(s, ui.oscurecer(color_pasto, 0.75), [(x, y + 6) for x, y in pasto])
-    pygame.draw.polygon(s, color_pasto, pasto)
+    base = None
+    if pincel.HAY_SKIA:
+        base = pincel.isla_base((w, h, semilla, tuple(color_pasto), orilla), w, h, cx, cy, agua, arena, pasto,
+                                color_pasto, orilla or (90, 196, 206), s.get_width(), s.get_height())
+    if base is not None:
+        s.blit(base, (0, 0))
+    else:
+        dibujo.polygon(s, orilla or (90, 196, 206), agua)
+        dibujo.polygon(s, ui.BORDE, arena)
+        dibujo.polygon(s, ui.ARENA, _blob(cx, cy, w * 0.47 - 3, h * 0.4 - 3, random.Random(semilla)))
+        dibujo.polygon(s, ui.oscurecer(color_pasto, 0.75), [(x, y + 6) for x, y in pasto])
+        dibujo.polygon(s, color_pasto, pasto)
     # matitas
     for _ in range(14):
         x = rng.uniform(cx - w * 0.33, cx + w * 0.33)
         y = rng.uniform(cy - h * 0.25, cy + h * 0.18)
         c = ui.oscurecer(color_pasto, 0.82)
         for dx in (-4, 0, 4):
-            pygame.draw.line(s, c, (x, y), (x + dx * 1.5, y - 9), 2)
+            dibujo.line(s, c, (x, y), (x + dx * 1.5, y - 9), 2)
     _decorar(s, deco, cx, cy, w, h, rng, color_pasto)
     for k in range(palmeras if deco in ("palmeras", "flores", "rocas") else 0):
         lado = -1 if k % 2 == 0 else 1
@@ -230,27 +272,27 @@ def isla(w, h, color_pasto=ui.PASTO, semilla=0, palmeras=3, palmeras_borde=False
         palmera(s, (x, y), rng.uniform(80, 110), inclina=0.25 * lado, escala=rng.uniform(0.75, 0.95))
     if tinte:
         s.fill(tuple(tinte) + (255,), special_flags=pygame.BLEND_RGBA_MULT)
-    _CACHE[clave] = s
     return s
 
 
 def pergamino():
     """Fondo de mapa del tesoro para las pantallas de estudio (se calcula una vez)."""
-    if "pergamino" in _CACHE:
-        return _CACHE["pergamino"]
-    s = _gradiente(ANCHO, ALTO, (255, 249, 233), (247, 234, 204))
+    clave = ("pergamino", Lienzo(1, 1).e)
+    if clave in _CACHE:
+        return _CACHE[clave]
+    s = gradiente(ANCHO, ALTO, (255, 249, 233), (247, 234, 204))
     rng = np.random.default_rng(3)
-    # manchitas de papel
-    arr = pygame.surfarray.pixels3d(s)
-    ruido = rng.normal(0, 3.2, (ANCHO, ALTO, 1))
+    # manchitas de papel (a la resolución real)
+    arr = pygame.surfarray.pixels3d(s.sup)
+    ruido = rng.normal(0, 3.2, arr.shape[:2] + (1,))
     arr[:] = np.clip(arr.astype(np.int16) + ruido, 0, 255).astype(np.uint8)
     del arr
     # líneas de latitud y longitud muy suaves
-    capa = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+    capa = Lienzo(*((ANCHO, ALTO)))
     for x in range(0, ANCHO, 80):
-        pygame.draw.line(capa, (180, 140, 90, 22), (x, 0), (x, ALTO), 1)
+        dibujo.line(capa, (180, 140, 90, 22), (x, 0), (x, ALTO), 1)
     for y in range(0, ALTO, 80):
-        pygame.draw.line(capa, (180, 140, 90, 22), (0, y), (ANCHO, y), 1)
+        dibujo.line(capa, (180, 140, 90, 22), (0, y), (ANCHO, y), 1)
     # rosa de los vientos en una esquina
     cx, cy = ANCHO - 90, ALTO - 90
     for k in range(8):
@@ -259,21 +301,21 @@ def pergamino():
         p = (cx + math.cos(a) * largo, cy + math.sin(a) * largo)
         q1 = (cx + math.cos(a + 0.35) * 12, cy + math.sin(a + 0.35) * 12)
         q2 = (cx + math.cos(a - 0.35) * 12, cy + math.sin(a - 0.35) * 12)
-        pygame.draw.polygon(capa, (170, 120, 70, 40), [p, q1, (cx, cy), q2])
-    pygame.draw.circle(capa, (170, 120, 70, 40), (cx, cy), 46, 2)
+        dibujo.polygon(capa, (170, 120, 70, 40), [p, q1, (cx, cy), q2])
+    dibujo.circle(capa, (170, 120, 70, 40), (cx, cy), 46, 2)
     # sendero punteado decorativo
     for i in range(40):
         t = i / 40
         x = 40 + t * 260
         y = ALTO - 40 - math.sin(t * 5) * 30 - t * 60
-        pygame.draw.circle(capa, (190, 130, 80, 40), (x, y), 3)
+        dibujo.circle(capa, (190, 130, 80, 40), (x, y), 3)
     s.blit(capa, (0, 0))
     # viñeta en los bordes
-    vin = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+    vin = Lienzo(*((ANCHO, ALTO)))
     for k in range(18):
-        pygame.draw.rect(vin, (150, 100, 50, 7), (k * 2, k * 2, ANCHO - k * 4, ALTO - k * 4), 3, border_radius=30)
+        dibujo.rect(vin, (150, 100, 50, 7), (k * 2, k * 2, ANCHO - k * 4, ALTO - k * 4), 3, border_radius=30)
     s.blit(vin, (0, 0))
-    _CACHE["pergamino"] = s
+    _CACHE[clave] = s
     return s
 
 
@@ -313,14 +355,14 @@ def tema(mundo_id):
 
 
 def _con_borde_poligono(sup, pts, color, grosor=3):
-    pygame.draw.polygon(sup, ui.BORDE, pts, grosor * 2)
-    pygame.draw.polygon(sup, color, pts)
+    dibujo.polygon(sup, ui.BORDE, pts, grosor * 2)
+    dibujo.polygon(sup, color, pts)
 
 
 def pino(sup, base, alto=120, color=(64, 140, 80)):
     bx, by = base
-    pygame.draw.rect(sup, ui.BORDE, (bx - 7, by - 24, 14, 26))
-    pygame.draw.rect(sup, (140, 92, 54), (bx - 5, by - 22, 10, 22))
+    dibujo.rect(sup, ui.BORDE, (bx - 7, by - 24, 14, 26))
+    dibujo.rect(sup, (140, 92, 54), (bx - 5, by - 22, 10, 22))
     for k in range(3):
         ancho = alto * (0.42 - k * 0.09)
         y0 = by - 18 - k * alto * 0.24
@@ -333,44 +375,44 @@ def cactus(sup, base, alto=90):
     verde = (110, 176, 96)
     for r in [(bx - 12, by - alto, 24, alto), (bx - 40, by - alto * 0.7, 18, alto * 0.38),
               (bx + 22, by - alto * 0.85, 18, alto * 0.45)]:
-        pygame.draw.rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=12)
+        dibujo.rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=12)
     for r in [(bx - 30, by - alto * 0.42, 22, 14), (bx + 10, by - alto * 0.5, 22, 14)]:
-        pygame.draw.rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=6)
+        dibujo.rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=6)
     for r in [(bx - 12, by - alto, 24, alto), (bx - 40, by - alto * 0.7, 18, alto * 0.38),
               (bx + 22, by - alto * 0.85, 18, alto * 0.45), (bx - 30, by - alto * 0.42, 22, 14),
               (bx + 10, by - alto * 0.5, 22, 14)]:
-        pygame.draw.rect(sup, verde, r, border_radius=10)
-    pygame.draw.circle(sup, (255, 150, 190), (bx, by - alto - 2), 6)
+        dibujo.rect(sup, verde, r, border_radius=10)
+    dibujo.circle(sup, (255, 150, 190), (bx, by - alto - 2), 6)
 
 
 def roca(sup, centro, r, color=(160, 156, 150)):
     cx, cy = centro
     pts = [(cx - r, cy), (cx - r * 0.7, cy - r * 0.7), (cx, cy - r * 0.9), (cx + r * 0.8, cy - r * 0.55), (cx + r, cy)]
     _con_borde_poligono(sup, pts, color)
-    pygame.draw.line(sup, ui.aclarar(color, 0.35), (cx - r * 0.5, cy - r * 0.55), (cx - r * 0.05, cy - r * 0.75), 3)
+    dibujo.line(sup, ui.aclarar(color, 0.35), (cx - r * 0.5, cy - r * 0.55), (cx - r * 0.05, cy - r * 0.75), 3)
 
 
 def flor(sup, pos, color):
     x, y = pos
-    pygame.draw.line(sup, (80, 150, 70), (x, y), (x, y + 10), 2)
+    dibujo.line(sup, (80, 150, 70), (x, y), (x, y + 10), 2)
     for k in range(5):
         a = k * math.tau / 5
-        pygame.draw.circle(sup, color, (x + math.cos(a) * 5, y + math.sin(a) * 5), 4)
-    pygame.draw.circle(sup, ui.SOL, (x, y), 3)
+        dibujo.circle(sup, color, (x + math.cos(a) * 5, y + math.sin(a) * 5), 4)
+    dibujo.circle(sup, ui.SOL, (x, y), 3)
 
 
 def hongo(sup, base, escala=1.0, color=(200, 80, 110)):
     bx, by = base
     tallo = pygame.Rect(0, 0, 18 * escala, 34 * escala)
     tallo.midbottom = (bx, by)
-    pygame.draw.rect(sup, ui.BORDE, tallo.inflate(6, 6), border_radius=8)
-    pygame.draw.rect(sup, (250, 236, 210), tallo, border_radius=7)
+    dibujo.rect(sup, ui.BORDE, tallo.inflate(6, 6), border_radius=8)
+    dibujo.rect(sup, (250, 236, 210), tallo, border_radius=7)
     rx, ry = 36 * escala, 30 * escala
     base_y = tallo.top + 8 * escala
     cupula = [(bx + math.cos(a) * rx, base_y - math.sin(a) * ry) for a in [k * math.pi / 16 for k in range(17)]]
     _con_borde_poligono(sup, cupula, color)
     for dx, dy, r in ((-16, -10, 6), (10, -18, 5), (22, -6, 4), (-2, -6, 4)):
-        pygame.draw.circle(sup, (255, 248, 236), (bx + dx * escala, base_y + dy * escala), r * escala)
+        dibujo.circle(sup, (255, 248, 236), (bx + dx * escala, base_y + dy * escala), r * escala)
 
 
 def montana(sup, base, ancho, alto):
@@ -379,19 +421,19 @@ def montana(sup, base, ancho, alto):
     _con_borde_poligono(sup, [(bx - ancho * 0.14, by - alto * 0.72), (bx, by - alto), (bx + ancho * 0.14, by - alto * 0.72),
                               (bx + ancho * 0.05, by - alto * 0.66), (bx - ancho * 0.04, by - alto * 0.7)], (250, 250, 255), 2)
     # cascada
-    pygame.draw.rect(sup, (150, 210, 240), (bx + ancho * 0.08, by - alto * 0.55, 16, alto * 0.55))
+    dibujo.rect(sup, (150, 210, 240), (bx + ancho * 0.08, by - alto * 0.55, 16, alto * 0.55))
     for k in range(4):
         y = by - alto * 0.5 + k * alto * 0.13
-        pygame.draw.line(sup, (230, 248, 255), (bx + ancho * 0.08 + 4, y), (bx + ancho * 0.08 + 4, y + 14), 2)
+        dibujo.line(sup, (230, 248, 255), (bx + ancho * 0.08 + 4, y), (bx + ancho * 0.08 + 4, y + 14), 2)
 
 
 def volcan(sup, base, ancho, alto):
     bx, by = base
     _con_borde_poligono(sup, [(bx - ancho / 2, by), (bx - ancho * 0.12, by - alto), (bx + ancho * 0.12, by - alto),
                               (bx + ancho / 2, by)], (134, 96, 80))
-    pygame.draw.polygon(sup, (250, 120, 60), [(bx - ancho * 0.12, by - alto), (bx + ancho * 0.12, by - alto),
+    dibujo.polygon(sup, (250, 120, 60), [(bx - ancho * 0.12, by - alto), (bx + ancho * 0.12, by - alto),
                                               (bx + ancho * 0.05, by - alto * 0.86), (bx - ancho * 0.02, by - alto * 0.9)])
-    pygame.draw.lines(sup, (250, 150, 70), False, [(bx + ancho * 0.02, by - alto * 0.9), (bx - ancho * 0.04, by - alto * 0.6),
+    dibujo.lines(sup, (250, 150, 70), False, [(bx + ancho * 0.02, by - alto * 0.9), (bx - ancho * 0.04, by - alto * 0.6),
                                                    (bx + ancho * 0.03, by - alto * 0.35)], 6)
 
 
@@ -399,28 +441,28 @@ def arbol_seco(sup, base, alto=100):
     bx, by = base
     color = (96, 72, 64)
     tronco = [(bx, by), (bx + 4, by - alto * 0.6), (bx - 2, by - alto)]
-    pygame.draw.lines(sup, ui.BORDE, False, tronco, 12)
-    pygame.draw.lines(sup, color, False, tronco, 8)
+    dibujo.lines(sup, ui.BORDE, False, tronco, 12)
+    dibujo.lines(sup, color, False, tronco, 8)
     for (x1, y1, x2, y2) in ((bx + 3, by - alto * 0.55, bx + 34, by - alto * 0.8), (bx + 1, by - alto * 0.75, bx - 30, by - alto * 0.98),
                              (bx + 20, by - alto * 0.68, bx + 30, by - alto * 0.95)):
-        pygame.draw.line(sup, ui.BORDE, (x1, y1), (x2, y2), 8)
-        pygame.draw.line(sup, color, (x1, y1), (x2, y2), 4)
+        dibujo.line(sup, ui.BORDE, (x1, y1), (x2, y2), 8)
+        dibujo.line(sup, color, (x1, y1), (x2, y2), 4)
 
 
 def calavera_roca(sup, centro, r):
     cx, cy = centro
     gris = (176, 172, 168)
-    pygame.draw.circle(sup, ui.BORDE, (cx, cy), r + 3)
-    pygame.draw.circle(sup, gris, (cx, cy), r)
+    dibujo.circle(sup, ui.BORDE, (cx, cy), r + 3)
+    dibujo.circle(sup, gris, (cx, cy), r)
     mandibula = pygame.Rect(0, 0, r * 1.1, r * 0.7)
     mandibula.midtop = (cx, cy + r * 0.55)
-    pygame.draw.rect(sup, ui.BORDE, mandibula.inflate(6, 6), border_radius=10)
-    pygame.draw.rect(sup, gris, mandibula, border_radius=8)
+    dibujo.rect(sup, ui.BORDE, mandibula.inflate(6, 6), border_radius=10)
+    dibujo.rect(sup, gris, mandibula, border_radius=8)
     for dx in (-0.38, 0.38):
-        pygame.draw.ellipse(sup, (40, 34, 56), (cx + dx * r - r * 0.22, cy - r * 0.1, r * 0.44, r * 0.5))
-    pygame.draw.polygon(sup, (40, 34, 56), [(cx, cy + r * 0.38), (cx - r * 0.1, cy + r * 0.58), (cx + r * 0.1, cy + r * 0.58)])
+        dibujo.ellipse(sup, (40, 34, 56), (cx + dx * r - r * 0.22, cy - r * 0.1, r * 0.44, r * 0.5))
+    dibujo.polygon(sup, (40, 34, 56), [(cx, cy + r * 0.38), (cx - r * 0.1, cy + r * 0.58), (cx + r * 0.1, cy + r * 0.58)])
     for k in range(-2, 3):
-        pygame.draw.line(sup, ui.BORDE, (cx + k * r * 0.18, mandibula.top + 4), (cx + k * r * 0.18, mandibula.bottom - 4), 2)
+        dibujo.line(sup, ui.BORDE, (cx + k * r * 0.18, mandibula.top + 4), (cx + k * r * 0.18, mandibula.bottom - 4), 2)
 
 
 def _decorar(s, deco, cx, cy, w, h, rng, pasto):
@@ -478,13 +520,13 @@ def niebla():
     """Banda de niebla que se repite de costado (para la Isla Calavera)."""
     if "niebla" in _CACHE:
         return _CACHE["niebla"]
-    s = pygame.Surface((ANCHO, 160), pygame.SRCALPHA)
+    s = Lienzo(*((ANCHO, 160)))
     rng = random.Random(4)
     for _ in range(26):
         w = rng.uniform(160, 340)
         h = rng.uniform(40, 80)
         x = rng.uniform(-w / 2, ANCHO - w / 2)
         y = rng.uniform(20, 120)
-        pygame.draw.ellipse(s, (210, 210, 240, 26), (x, y, w, h))
+        dibujo.ellipse(s, (210, 210, 240, 26), (x, y, w, h))
     _CACHE["niebla"] = s
     return s

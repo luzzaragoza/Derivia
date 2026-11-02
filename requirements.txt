@@ -3,3 +3,5 @@ sympy>=1.13
 matplotlib>=3.9
 numpy
 mpmath
+# Opcional pero muy recomendado (gráficos en alta calidad):
+# skia-python>=87

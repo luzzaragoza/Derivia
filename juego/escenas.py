@@ -6,7 +6,9 @@ import random
 import pygame
 
 from . import gato as modulo_gato
-from . import paisaje, ropa, ui
+from . import paisaje, pincel, ropa, ui
+from . import lienzo as dibujo
+from .lienzo import Lienzo
 from .fx import Efectos, Fueguito, rebote, suave
 from .gato import Gato
 from .mate import (C, ERRORES, ErrorEntrada, casi_igual, diagnosticar, diagnosticar_primitiva, equivalentes,
@@ -56,7 +58,7 @@ _VELO = {}
 def _velo_logica():
     """Un tinte lila suave para las preguntas de pensar (así se distinguen de las de calcular)."""
     if "v" not in _VELO:
-        v = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        v = Lienzo(*((ANCHO, ALTO)))
         v.fill((186, 150, 236, 34))
         _VELO["v"] = v
     return _VELO["v"]
@@ -70,15 +72,15 @@ def cartelito_consigna(logica):
     texto = "PENSÁ" if logica else "CALCULÁ"
     color = (150, 110, 220) if logica else ui.CORAL
     t = ui.texto(texto, 15, CREMA, negrita=True)
-    s = pygame.Surface((t.get_width() + 44, 30), pygame.SRCALPHA)
-    pygame.draw.rect(s, BORDE, s.get_rect(), border_radius=15)
-    pygame.draw.rect(s, color, s.get_rect().inflate(-4, -4), border_radius=13)
+    s = Lienzo(t.get_width() + 44, 30)
+    dibujo.rect(s, BORDE, s.get_rect(), border_radius=15)
+    dibujo.rect(s, color, s.get_rect().inflate(-4, -4), border_radius=13)
     if logica:   # lamparita
-        pygame.draw.circle(s, (255, 236, 140), (17, 13), 7)
-        pygame.draw.rect(s, (230, 230, 230), (14, 19, 7, 5), border_radius=2)
+        dibujo.circle(s, (255, 236, 140), (17, 13), 7)
+        dibujo.rect(s, (230, 230, 230), (14, 19, 7, 5), border_radius=2)
     else:        # lápiz
-        pygame.draw.line(s, (255, 214, 102), (10, 22), (22, 9), 5)
-        pygame.draw.polygon(s, (255, 236, 200), [(8, 25), (10, 19), (14, 23)])
+        dibujo.line(s, (255, 214, 102), (10, 22), (22, 9), 5)
+        dibujo.polygon(s, (255, 236, 200), [(8, 25), (10, 19), (14, 23)])
     s.blit(t, (32, 15 - t.get_height() // 2))
     _VELO[clave] = s
     return s
@@ -88,8 +90,8 @@ def flecha_reiniciar(sup, centro, tam, color):
     cx, cy = centro
     r = pygame.Rect(0, 0, tam, tam)
     r.center = centro
-    pygame.draw.arc(sup, color, r, 0.6, math.tau - 0.2, 4)
-    pygame.draw.polygon(sup, color, [(cx + tam * 0.5, cy - tam * 0.42), (cx + tam * 0.52, cy), (cx + tam * 0.12, cy - tam * 0.14)])
+    dibujo.arc(sup, color, r, 0.6, math.tau - 0.2, 4)
+    dibujo.polygon(sup, color, [(cx + tam * 0.5, cy - tam * 0.42), (cx + tam * 0.52, cy), (cx + tam * 0.12, cy - tam * 0.14)])
 
 
 def nombre_corto(m):
@@ -127,7 +129,7 @@ class Escena:
             b.dibujar(sup)
 
     def boton_opciones(self, rect):
-        icono = pygame.Surface((40, 40), pygame.SRCALPHA)
+        icono = Lienzo(*((40, 40)))
         ui.engranaje(icono, (20, 20), 32, BORDE)
         return Boton(rect, icono, self.abrir_opciones, ARENA, relieve=4)
 
@@ -189,7 +191,7 @@ class Menu(Escena):
         self.cielo.actualizar(dt)
         self.mar.actualizar(dt)
         self.gato.actualizar(dt)
-        if self.botones[0].rect.collidepoint(pygame.mouse.get_pos()) and self.gato.animo == "normal":
+        if self.botones[0].rect.collidepoint(dibujo.raton()) and self.gato.animo == "normal":
             self.gato.reaccionar("feliz", 0.8, saltar=False)
 
     def dibujar(self, sup):
@@ -202,7 +204,7 @@ class Menu(Escena):
         t = ui.texto_borde(nombre, 22, CREMA, MADERA_OSC, 2)
         self.rect_nombre = pygame.Rect(0, 0, t.get_width() + 40, 42)
         self.rect_nombre.midtop = (260, 666)
-        encima = self.rect_nombre.collidepoint(pygame.mouse.get_pos())
+        encima = self.rect_nombre.collidepoint(dibujo.raton())
         ui.tabla_madera(sup, self.rect_nombre.move(0, -2 if encima else 0), radio=12)
         sup.blit(t, t.get_rect(center=self.rect_nombre.move(0, -2 if encima else 0).center))
         # título
@@ -281,9 +283,14 @@ class Mapa(Escena):
         """Isla + camino + nodos (lo que no se mueve), cacheado por mundo."""
         if idx in self.capas:
             return self.capas[idx]
+        with pincel.siempre():
+            self.capas[idx] = self._armar_capa(idx)
+        return self.capas[idx]
+
+    def _armar_capa(self, idx):
         m = MUNDOS[idx]
         p = self.app.progreso
-        s = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        s = Lienzo(*((ANCHO, ALTO)))
         paisaje.isla_tema(s, (100, 205), 1080, 500, paisaje.tema(m.id), semilla=idx * 7 + 1, palmeras=4,
                           palmeras_borde=True)
         nodos = self._nodos(m)
@@ -294,30 +301,35 @@ class Mapa(Escena):
             tramo = int(k / por_tramo)
             hecho = p.aprobado(m.id, tramo) and tramo + 1 < len(nodos) and p.desbloqueado(m.id, tramo + 1)
             if hecho:
-                pygame.draw.line(s, BORDE, curva[k], curva[min(k + 3, len(curva) - 1)], 14)
-            pygame.draw.circle(s, ui.oscurecer(m.color, 0.6) if hecho else (196, 160, 110), curva[k], 7 if hecho else 5)
+                dibujo.line(s, BORDE, curva[k], curva[min(k + 3, len(curva) - 1)], 14)
+            dibujo.circle(s, ui.oscurecer(m.color, 0.6) if hecho else (196, 160, 110), curva[k], 7 if hecho else 5)
         for k in range(0, len(curva) - 1, 3):
             tramo = int(k / por_tramo)
             hecho = p.aprobado(m.id, tramo) and tramo + 1 < len(nodos) and p.desbloqueado(m.id, tramo + 1)
             if hecho:
-                pygame.draw.line(s, ui.aclarar(m.color, 0.1), curva[k], curva[min(k + 3, len(curva) - 1)], 8)
+                dibujo.line(s, ui.aclarar(m.color, 0.1), curva[k], curva[min(k + 3, len(curva) - 1)], 8)
         # nodos
         for i, (nx, ny) in enumerate(nodos):
             nivel = m.niveles[i]
             abierto = p.desbloqueado(m.id, i)
             r = 38 if nivel.jefe else 30
             if nivel.jefe:
-                pygame.draw.line(s, BORDE, (nx + 10, ny - r - 34), (nx + 10, ny - r + 6), 4)
-                pygame.draw.polygon(s, BORDE, [(nx + 12, ny - r - 36), (nx + 46, ny - r - 24), (nx + 12, ny - r - 10)])
-                pygame.draw.polygon(s, CORAL if abierto else GRIS,
+                dibujo.line(s, BORDE, (nx + 10, ny - r - 34), (nx + 10, ny - r + 6), 4)
+                dibujo.polygon(s, BORDE, [(nx + 12, ny - r - 36), (nx + 46, ny - r - 24), (nx + 12, ny - r - 10)])
+                dibujo.polygon(s, CORAL if abierto else GRIS,
                                     [(nx + 13, ny - r - 32), (nx + 40, ny - r - 24), (nx + 13, ny - r - 15)])
-            pygame.draw.circle(s, BORDE, (nx, ny + 6), r + 3)
-            pygame.draw.circle(s, BORDE, (nx, ny), r + 3)
+            color = (m.color if p.aprobado(m.id, i) else SOL) if abierto else (200, 192, 178)
+            bola, mb = pincel.esfera(r, color, BORDE) if pincel.HAY_SKIA else (None, 0)
+            if bola is not None:
+                s.blit(bola, (nx - r - 2 - mb, ny - r - 2 - mb))
+            else:
+                dibujo.circle(s, BORDE, (nx, ny + 6), r + 3)
+                dibujo.circle(s, BORDE, (nx, ny), r + 3)
+                dibujo.circle(s, ui.oscurecer(color, 0.8), (nx, ny + 5), r)
+                dibujo.circle(s, color, (nx, ny), r)
+                if abierto:
+                    dibujo.circle(s, ui.aclarar(color, 0.5), (nx - r * 0.3, ny - r * 0.35), r * 0.22)
             if abierto:
-                color = m.color if p.aprobado(m.id, i) else SOL
-                pygame.draw.circle(s, ui.oscurecer(color, 0.8), (nx, ny + 5), r)
-                pygame.draw.circle(s, color, (nx, ny), r)
-                pygame.draw.circle(s, ui.aclarar(color, 0.5), (nx - r * 0.3, ny - r * 0.35), r * 0.22)
                 num = "J" if nivel.jefe else str(i + 1)
                 t = ui.texto_borde(num, 30 if nivel.jefe else 26, CREMA, BORDE, 3, sombra=False)
                 s.blit(t, t.get_rect(center=(nx, ny + 1)))
@@ -327,9 +339,7 @@ class Mapa(Escena):
                     ey = ny + r + 16 - (4 if k == 1 else 0)
                     ui.estrella(s, (ex, ey), 11, SOL if k < est else (238, 228, 210), BORDE, brillo=False)
             else:
-                pygame.draw.circle(s, (200, 192, 178), (nx, ny), r)
                 ui.candado(s, (nx, ny), int(r * 0.8), (150, 140, 126))
-        self.capas[idx] = s
         return s
 
     def armar(self):
@@ -344,7 +354,7 @@ class Mapa(Escena):
         for d, x in ((-1, ANCHO // 2 - 360), (1, ANCHO // 2 + 310)):
             destino = self.sel + d
             ok = 0 <= destino < len(MUNDOS) and p.mundo_desbloqueado(MUNDOS[destino].id)
-            icono = pygame.Surface((30, 30), pygame.SRCALPHA)
+            icono = Lienzo(*((30, 30)))
             ui.triangulo(icono, (15, 15), 22, CREMA if ok else (230, 222, 210), d)
             self.botones.append(Boton((x, 100, 50, 50), icono, (lambda d=d: self.mover(d)), LAVANDA,
                                       habilitado=ok, tecla=pygame.K_LEFT if d < 0 else pygame.K_RIGHT,
@@ -505,7 +515,7 @@ class Mapa(Escena):
         for et in etiquetas:
             t = ui.texto(et, 14, TINTA if et != "JEFE" else CREMA, negrita=True)
             r = pygame.Rect(x, y, t.get_width() + 16, 22)
-            pygame.draw.rect(sup, CORAL if et == "JEFE" else ARENA, r, border_radius=11)
+            dibujo.rect(sup, CORAL if et == "JEFE" else ARENA, r, border_radius=11)
             sup.blit(t, t.get_rect(center=r.center))
             x += r.width + 6
         pie_s = ui.texto(pie, 15, ui.CORAL_OSC if abierto else SUAVE, negrita=True)
@@ -567,28 +577,28 @@ class Mapa(Escena):
         deco = paisaje.tema(self.mundo.id)["deco"]
         if deco == "volcan":
             for x, y, r, edad in self.humo:
-                capa = pygame.Surface((int(r * 2) + 2, int(r * 2) + 2), pygame.SRCALPHA)
-                pygame.draw.circle(capa, (120, 110, 120, int(150 * (1 - edad / 3.5))), (r + 1, r + 1), r)
+                capa = Lienzo(int(r * 2) + 2, int(r * 2) + 2)
+                dibujo.circle(capa, (120, 110, 120, int(150 * (1 - edad / 3.5))), (r + 1, r + 1), r)
                 sup.blit(capa, (x - r, y - r))
         elif deco == "tormenta":
             for x, y in self.gotas:
-                pygame.draw.line(sup, (170, 190, 220), (x, y), (x - 4, y + 12), 1)
+                dibujo.line(sup, (170, 190, 220), (x, y), (x - 4, y + 12), 1)
             if self.rayo:
                 puntos, vida = self.rayo
-                flash = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+                flash = Lienzo(*((ANCHO, ALTO)))
                 flash.fill((255, 255, 255, int(110 * vida / 0.35)))
                 sup.blit(flash, (0, 0))
-                pygame.draw.lines(sup, (255, 250, 200), False, puntos, 5)
-                pygame.draw.lines(sup, (255, 255, 255), False, puntos, 2)
+                dibujo.lines(sup, (255, 250, 200), False, puntos, 5)
+                dibujo.lines(sup, (255, 255, 255), False, puntos, 2)
         elif deco == "calavera":
             for x, y, fase in self.luciernagas:
                 px = x + math.sin(fase * 0.7) * 30
                 py = y + math.cos(fase * 0.9) * 18
                 brillo = 0.5 + 0.5 * math.sin(fase * 3)
-                halo = pygame.Surface((24, 24), pygame.SRCALPHA)
-                pygame.draw.circle(halo, (200, 255, 140, int(90 * brillo)), (12, 12), 11)
+                halo = Lienzo(*((24, 24)))
+                dibujo.circle(halo, (200, 255, 140, int(90 * brillo)), (12, 12), 11)
                 sup.blit(halo, (px - 12, py - 12))
-                pygame.draw.circle(sup, (230, 255, 170), (px, py), 2.5)
+                dibujo.circle(sup, (230, 255, 170), (px, py), 2.5)
             niebla = paisaje.niebla()
             desplaza = (self.t * 18) % ANCHO
             sup.blit(niebla, (desplaza - ANCHO, 560))
@@ -597,7 +607,7 @@ class Mapa(Escena):
     def dibujar(self, sup):
         if self.desliz:
             self._dibujar_fondo(sup, self.desliz[2])
-            nuevo = pygame.Surface((ANCHO, ALTO))
+            nuevo = Lienzo(ANCHO, ALTO, alfa=False)
             self._dibujar_fondo(nuevo, self.sel)
             nuevo.set_alpha(int(255 * suave(self.desliz[0])))
             sup.blit(nuevo, (0, 0))
@@ -615,7 +625,7 @@ class Mapa(Escena):
             if a:
                 nx, ny = self.nodos[a["i"]]
                 r = 44 + 10 * abs(math.sin(a["t"] * 9))
-                pygame.draw.circle(sup, SOL, (nx, ny), r, 6)
+                dibujo.circle(sup, SOL, (nx, ny), r, 6)
                 k = suave(min(1.0, a["t"] / 0.42))
                 x = a["desde"][0] + (a["hasta"][0] - a["desde"][0]) * k
                 y = a["desde"][1] + (a["hasta"][1] - a["desde"][1]) * k - math.sin(k * math.pi) * 120
@@ -625,12 +635,12 @@ class Mapa(Escena):
                 # anillo que late en el nivel actual
                 nx, ny = self.nodos[self.gato_nodo]
                 r = (40 if m.niveles[self.gato_nodo].jefe else 32) + 6 + 4 * math.sin(self.t * 4)
-                pygame.draw.circle(sup, CREMA, (nx, ny), r, 4)
+                dibujo.circle(sup, CREMA, (nx, ny), r, 4)
                 self.gato.dibujar(sup, (nx - 58, ny + 30))
             self._dibujar_efectos_tema(sup)
             if self.hover is not None:
                 nx, ny = self.nodos[self.hover]
-                pygame.draw.circle(sup, (255, 255, 255), (nx, ny), 44, 3)
+                dibujo.circle(sup, (255, 255, 255), (nx, ny), 44, 3)
         # cartel del mundo
         m = self.mundo
         tengo, total = self.app.progreso.estrellas_mundo(m.id)
@@ -646,7 +656,7 @@ class Mapa(Escena):
         self.dibujar_botones(sup)
         for b in self.botones:
             if getattr(b, "ficha", None) == self.sel:
-                pygame.draw.rect(sup, CREMA, b.rect.inflate(10, 12).move(0, 2), 3, border_radius=16)
+                dibujo.rect(sup, CREMA, b.rect.inflate(10, 12).move(0, 2), 3, border_radius=16)
         if self.hover is not None and not self.desliz and not self.arranque:
             self._tooltip(sup, self.hover)
         self.fx.dibujar(sup)
@@ -867,7 +877,7 @@ class Juego(Escena):
 
     def armar(self):
         """Calcula la ubicación de todo según el estado actual."""
-        icono = pygame.Surface((36, 36), pygame.SRCALPHA)
+        icono = Lienzo(*((36, 36)))
         flecha_reiniciar(icono, (18, 18), 26, BORDE)
         self.botones = [Boton((14, 10, 108, 44), "Salir", self.atras, DURAZNO, tam=19, relieve=4),
                         self.boton_opciones((130, 10, 48, 44)),
@@ -1298,8 +1308,8 @@ class Juego(Escena):
         if self.jefe:
             et = ui.texto_borde("JEFE", 16, CREMA, ui.CORAL_OSC, 2)
             rr = pygame.Rect(x, 18, et.get_width() + 18, 28)
-            pygame.draw.rect(sup, CORAL, rr, border_radius=14)
-            pygame.draw.rect(sup, BORDE, rr, 2, border_radius=14)
+            dibujo.rect(sup, CORAL, rr, border_radius=14)
+            dibujo.rect(sup, BORDE, rr, 2, border_radius=14)
             sup.blit(et, et.get_rect(center=rr.center))
         # vidas
         x = ANCHO - 34
@@ -1311,7 +1321,7 @@ class Juego(Escena):
                 if k == self.vidas and self.t_corazon < 0.6:
                     kk = self.t_corazon / 0.6
                     tam = 28 * (1 + kk * 1.2)
-                    cap = pygame.Surface((80, 80), pygame.SRCALPHA)
+                    cap = Lienzo(*((80, 80)))
                     ui.corazon(cap, (40, 40), tam, CORAL)
                     cap.set_alpha(int(255 * (1 - kk)))
                     sup.blit(cap, (x - 40, 30 - 40 - kk * 20))
@@ -1335,27 +1345,27 @@ class Juego(Escena):
         n = len(self.ejercicios)
         sep = min(30, 600 // max(1, n))
         x0 = ANCHO // 2 - (n - 1) * sep // 2
-        pygame.draw.line(sup, MADERA, (x0 - 14, 86), (x0 + (n - 1) * sep + 14, 86), 3)
+        dibujo.line(sup, MADERA, (x0 - 14, 86), (x0 + (n - 1) * sep + 14, 86), 3)
         for k in range(n):
             c = (x0 + k * sep, 86)
             if k < len(self.resultados):
                 color = {"bien": ui.PASTO, "salteado": (186, 150, 236)}.get(self.resultados[k], CORAL)
-                pygame.draw.circle(sup, BORDE, c, 10)
-                pygame.draw.circle(sup, color, c, 8)
+                dibujo.circle(sup, BORDE, c, 10)
+                dibujo.circle(sup, color, c, 8)
             elif k == self.i:
                 rr = 10 + 2 * math.sin(self.t * 5)
-                pygame.draw.circle(sup, BORDE, c, rr + 2)
-                pygame.draw.circle(sup, SOL, c, rr)
+                dibujo.circle(sup, BORDE, c, rr + 2)
+                dibujo.circle(sup, SOL, c, rr)
             else:
-                pygame.draw.circle(sup, ARENA_OSC, c, 7)
-                pygame.draw.circle(sup, ARENA, c, 5)
+                dibujo.circle(sup, ARENA_OSC, c, 7)
+                dibujo.circle(sup, ARENA, c, 5)
         if self.tiempo:
             restante = max(0.0, 1 - min(self.t_paso, self.tiempo) / self.tiempo)
             rr = pygame.Rect(ANCHO // 2 - 220, 100, 440, 10)
-            pygame.draw.rect(sup, BORDE, rr.inflate(4, 4), border_radius=6)
-            pygame.draw.rect(sup, (240, 228, 204), rr, border_radius=5)
+            dibujo.rect(sup, BORDE, rr.inflate(4, 4), border_radius=6)
+            dibujo.rect(sup, (240, 228, 204), rr, border_radius=5)
             col = ui.PASTO if restante > 0.5 else (SOL if restante > 0.25 else CORAL)
-            pygame.draw.rect(sup, col, (rr.left, rr.top, int(rr.width * restante), rr.height), border_radius=5)
+            dibujo.rect(sup, col, (rr.left, rr.top, int(rr.width * restante), rr.height), border_radius=5)
 
     def dibujar(self, sup):
         sup.blit(paisaje.pergamino(), (0, 0))
@@ -1401,8 +1411,8 @@ class Juego(Escena):
                 et = ui.texto_borde(self.app.progreso.nombre_gato, 16, CREMA, MADERA_OSC, 2)
                 r = pygame.Rect(0, 0, et.get_width() + 22, 26)
                 r.bottomleft = (p["rect"].left + 18, p["rect"].top + 6)
-                pygame.draw.rect(sup, MADERA, r, border_radius=13)
-                pygame.draw.rect(sup, MADERA_OSC, r, 2, border_radius=13)
+                dibujo.rect(sup, MADERA, r, border_radius=13)
+                dibujo.rect(sup, MADERA_OSC, r, 2, border_radius=13)
                 sup.blit(et, et.get_rect(center=r.center))
             sup.blit(p["titulo"], (p["rect"].left + 22, p["rect"].top + 14))
             if p["cuerpo"]:
@@ -1532,7 +1542,7 @@ class FinNivel(Escena):
     def dibujar(self, sup):
         self.cielo.dibujar(sup)
         if not self.gano:
-            gris = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+            gris = Lienzo(*((ANCHO, ALTO)))
             gris.fill((60, 70, 90, 70))
             sup.blit(gris, (0, 0))
         self.mar.dibujar(sup)
@@ -1551,7 +1561,7 @@ class FinNivel(Escena):
         else:
             t = ui.texto_borde("Te quedaste sin vidas", 44, CORAL, BORDE, 4)
         esc = rebote(min(1, self.t / 0.5))
-        t2 = pygame.transform.smoothscale(t, (max(1, int(t.get_width() * esc)), max(1, int(t.get_height() * esc))))
+        t2 = dibujo.escalar(t, (max(1, int(t.get_width() * esc)), max(1, int(t.get_height() * esc))))
         sup.blit(t2, t2.get_rect(center=(card.centerx, card.top + 64)))
         y = card.top + 110
         if self.gano and not j.practica:
@@ -1578,8 +1588,8 @@ class FinNivel(Escena):
             col, fila = k % 2, k // 2
             x = card.centerx - 260 + col * 290
             caja = pygame.Rect(x, y + fila * 70, 250, 60)
-            pygame.draw.rect(sup, (250, 236, 206), caja, border_radius=14)
-            pygame.draw.rect(sup, ui.ARENA_OSC, caja, 2, border_radius=14)
+            dibujo.rect(sup, (250, 236, 206), caja, border_radius=14)
+            dibujo.rect(sup, ui.ARENA_OSC, caja, 2, border_radius=14)
             sup.blit(ui.texto(a, 16, SUAVE, negrita=True), (caja.left + 14, caja.top + 6))
             sup.blit(ui.texto(b, 24, TINTA, negrita=True), (caja.left + 14, caja.top + 26))
             if a == "Monedas":
@@ -1606,19 +1616,19 @@ class FinNivel(Escena):
         """Pantalla especial: rayos dorados, trofeo, fuegos artificiales y la isla nueva."""
         j = self.j
         centro = (card.centerx, card.top + 150)
-        rayos = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        rayos = Lienzo(*((ANCHO, ALTO)))
         for k in range(16):
             a = self.t * 0.25 + k * math.tau / 16
             p1 = (centro[0] + math.cos(a - 0.09) * 900, centro[1] + math.sin(a - 0.09) * 900)
             p2 = (centro[0] + math.cos(a + 0.09) * 900, centro[1] + math.sin(a + 0.09) * 900)
-            pygame.draw.polygon(rayos, (255, 226, 120, 70), [centro, p1, p2])
+            dibujo.polygon(rayos, (255, 226, 120, 70), [centro, p1, p2])
         sup.blit(rayos, (0, 0))
         ui.tarjeta(sup, card, (255, 244, 214), 26, ui.SOL_OSC, 8)
-        pygame.draw.rect(sup, ui.SOL, card.inflate(-16, -16), 3, border_radius=20)
+        dibujo.rect(sup, ui.SOL, card.inflate(-16, -16), 3, border_radius=20)
         trofeo(sup, (card.centerx, card.top + 10), 92 * rebote(min(1, self.t / 0.6)))
         t = ui.texto_borde("¡Jefe derrotado!", 54, SOL, BORDE, 5)
         esc = rebote(min(1, max(0.01, (self.t - 0.15) / 0.5)))
-        t2 = pygame.transform.smoothscale(t, (max(1, int(t.get_width() * esc)), max(1, int(t.get_height() * esc))))
+        t2 = dibujo.escalar(t, (max(1, int(t.get_width() * esc)), max(1, int(t.get_height() * esc))))
         sup.blit(t2, t2.get_rect(center=(card.centerx, card.top + 92)))
         for k in range(3):
             c = self._pos_estrella(k)
@@ -1629,15 +1639,11 @@ class FinNivel(Escena):
         caja = pygame.Rect(card.left + 40, card.top + 228, card.width - 80, 166)
         if self.nuevo_mundo:
             nuevo = paisaje.tema(self.nuevo_mundo.id)
-            mini = pygame.Surface(caja.size)
-            arriba, abajo = nuevo["cielo"]
-            for yy in range(caja.height):
-                kk = yy / caja.height
-                pygame.draw.line(mini, [int(a + (b - a) * kk) for a, b in zip(arriba, abajo)], (0, yy), (caja.width, yy))
-            pygame.draw.rect(mini, nuevo["mar"][1], (0, caja.height * 0.58, caja.width, caja.height))
+            mini = paisaje.gradiente(caja.width, caja.height, *nuevo["cielo"])
+            dibujo.rect(mini, nuevo["mar"][1], (0, caja.height * 0.58, caja.width, caja.height))
             paisaje.isla_tema(mini, (caja.width // 2 - 170, 52), 340, 150, nuevo, semilla=3, palmeras=2)
             sup.blit(mini, caja)
-            pygame.draw.rect(sup, BORDE, caja, 4, border_radius=6)
+            dibujo.rect(sup, BORDE, caja, 4, border_radius=6)
             et = ui.texto_borde(f"¡Nueva isla: {nuevo['nombre']}!", 28, CREMA, BORDE, 3)
             sup.blit(et, et.get_rect(midtop=(caja.centerx, caja.top + 8)))
             sub = ui.texto_borde(f"{self.nuevo_mundo.nombre}: {self.nuevo_mundo.tema}", 18, SOL, BORDE, 2)
@@ -1651,8 +1657,8 @@ class FinNivel(Escena):
                  ("Sin errores", f"{sum(1 for r in j.resultados if r == 'bien')}/{len(j.ejercicios)}")]
         for k, (a, b_) in enumerate(datos):
             r = pygame.Rect(card.left + 60 + k * 205, card.top + 410, 190, 56)
-            pygame.draw.rect(sup, (250, 232, 190), r, border_radius=14)
-            pygame.draw.rect(sup, ui.SOL_OSC, r, 2, border_radius=14)
+            dibujo.rect(sup, (250, 232, 190), r, border_radius=14)
+            dibujo.rect(sup, ui.SOL_OSC, r, 2, border_radius=14)
             sup.blit(ui.texto(a, 15, SUAVE, negrita=True), (r.left + 12, r.top + 5))
             sup.blit(ui.texto(b_, 22, TINTA, negrita=True), (r.left + 12, r.top + 24))
             if a == "Monedas":
@@ -1673,20 +1679,20 @@ def trofeo(sup, centro, tam):
     for lado in (-1, 1):
         asa = pygame.Rect(0, 0, 34 * k, 40 * k)
         asa.center = (cx + lado * 38 * k, cy + 4 * k)
-        pygame.draw.ellipse(sup, BORDE, asa.inflate(8, 8), max(3, int(10 * k)))
-        pygame.draw.ellipse(sup, SOL, asa, max(2, int(6 * k)))
+        dibujo.ellipse(sup, BORDE, asa.inflate(8, 8), max(3, int(10 * k)))
+        dibujo.ellipse(sup, SOL, asa, max(2, int(6 * k)))
     copa = [(cx - 40 * k, cy - 30 * k), (cx + 40 * k, cy - 30 * k), (cx + 30 * k, cy + 18 * k),
             (cx + 10 * k, cy + 30 * k), (cx - 10 * k, cy + 30 * k), (cx - 30 * k, cy + 18 * k)]
-    pygame.draw.polygon(sup, BORDE, copa, max(3, int(8 * k)))
-    pygame.draw.polygon(sup, SOL, copa)
-    pygame.draw.rect(sup, BORDE, (cx - 8 * k - 3, cy + 28 * k, 16 * k + 6, 18 * k))
-    pygame.draw.rect(sup, ui.SOL_OSC, (cx - 8 * k, cy + 28 * k, 16 * k, 16 * k))
+    dibujo.polygon(sup, BORDE, copa, max(3, int(8 * k)))
+    dibujo.polygon(sup, SOL, copa)
+    dibujo.rect(sup, BORDE, (cx - 8 * k - 3, cy + 28 * k, 16 * k + 6, 18 * k))
+    dibujo.rect(sup, ui.SOL_OSC, (cx - 8 * k, cy + 28 * k, 16 * k, 16 * k))
     base = pygame.Rect(0, 0, 60 * k, 16 * k)
     base.midtop = (cx, cy + 44 * k)
-    pygame.draw.rect(sup, BORDE, base.inflate(6, 6), border_radius=5)
-    pygame.draw.rect(sup, MADERA, base, border_radius=4)
+    dibujo.rect(sup, BORDE, base.inflate(6, 6), border_radius=5)
+    dibujo.rect(sup, MADERA, base, border_radius=4)
     ui.estrella(sup, (cx, cy - 4 * k), 15 * k, (255, 248, 220), BORDE, brillo=False)
-    pygame.draw.line(sup, (255, 240, 180), (cx - 28 * k, cy - 22 * k), (cx - 20 * k, cy + 10 * k), max(2, int(4 * k)))
+    dibujo.line(sup, (255, 240, 180), (cx - 28 * k, cy - 22 * k), (cx - 20 * k, cy + 10 * k), max(2, int(4 * k)))
 
 
 # =============================================================== CUADERNO
@@ -1795,8 +1801,8 @@ class Ayuda(Escena):
         y += 30
         for nombre, ejemplo, vista in self.filas:
             r = pygame.Rect(40, y, 760, 36)
-            pygame.draw.rect(sup, TARJETA, r, border_radius=12)
-            pygame.draw.rect(sup, ui.ARENA_OSC, r, 2, border_radius=12)
+            dibujo.rect(sup, TARJETA, r, border_radius=12)
+            dibujo.rect(sup, ui.ARENA_OSC, r, 2, border_radius=12)
             sup.blit(ui.texto(nombre, 18, TINTA), (x1, y + 8))
             sup.blit(ui.texto(ejemplo, 18, LAVANDA_OSC, mono=True, negrita=True), (x2, y + 8))
             if vista:
@@ -1830,7 +1836,7 @@ class Opciones(Escena):
         self.previa = previa
         self.musica = getattr(previa, "musica", "isla")
         self.foto = app.lienzo.copy()
-        velo = pygame.Surface(self.foto.get_size(), pygame.SRCALPHA)
+        velo = Lienzo(*(self.foto.get_size()))
         velo.fill((40, 30, 40, 140))
         self.foto.blit(velo, (0, 0))
         self.t = 0.0
@@ -1970,7 +1976,7 @@ class Tienda(Escena):
         return [p.id for p in ropa.CATALOGO if p.lugar == self.lugar]
 
     def _tarjeta(self, item_id, w, h):
-        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        s = Lienzo(*((w, h)))
         img = modulo_gato.superficie(66, "normal", ropa=self._piezas(item_id))
         s.blit(img, img.get_rect(midtop=(w // 2, -10)))
         nombre = ui.escalar_a(ui.texto(self._nombre(item_id), 13, TINTA, negrita=True), w - 6)
@@ -2080,11 +2086,15 @@ class Tienda(Escena):
         self.cielo.dibujar(sup, sol=False)
         self.mar.dibujar(sup)
         pts = [(0, ALTO)] + [(x, 520 + 10 * math.sin(x / 70 + 1)) for x in range(0, 561, 20)] + [(560, ALTO)]
-        pygame.draw.polygon(sup, ui.ARENA, pts)
-        pygame.draw.lines(sup, ui.ESPUMA, False, pts[1:-1], 5)
-        pygame.draw.ellipse(sup, BORDE, (120, 528, 300, 70))
-        pygame.draw.ellipse(sup, CORAL, (124, 528, 292, 62))
-        pygame.draw.ellipse(sup, (255, 170, 150), (150, 538, 240, 42), 4)
+        dibujo.polygon(sup, ui.ARENA, pts)
+        dibujo.lines(sup, ui.ESPUMA, False, pts[1:-1], 5)
+        pieza, m = pincel.pedestal(300, 84, CORAL) if pincel.HAY_SKIA else (None, 0)
+        if pieza is not None:
+            sup.blit(pieza, (120 - m, 528 - m))
+        else:
+            dibujo.ellipse(sup, BORDE, (120, 528, 300, 70))
+            dibujo.ellipse(sup, CORAL, (124, 528, 292, 62))
+            dibujo.ellipse(sup, (255, 170, 150), (150, 538, 240, 42), 4)
         self.gato.dibujar(sup, (270, 566))
         nombre = self.app.progreso.nombre_gato
         letrero(sup, (ANCHO // 2 - 250, 16, 500, 64), f"Tienda de {nombre}" if nombre else "Tienda del michi", 30)
@@ -2226,10 +2236,10 @@ class RevisarErrores(Escena):
         if explicacion:
             partes.append(ui.rico(explicacion, 16, SUAVE, ancho=w - 40))
         alto = sum(p.get_height() + 6 for p in partes) + 24
-        s = pygame.Surface((w, alto), pygame.SRCALPHA)
-        pygame.draw.rect(s, (226, 210, 180), s.get_rect().move(0, 4), border_radius=16)
-        pygame.draw.rect(s, TARJETA, s.get_rect().inflate(0, -4).move(0, -2), border_radius=16)
-        pygame.draw.rect(s, ui.ARENA_OSC, s.get_rect().inflate(0, -4).move(0, -2), 2, border_radius=16)
+        s = Lienzo(*((w, alto)))
+        dibujo.rect(s, (226, 210, 180), s.get_rect().move(0, 4), border_radius=16)
+        dibujo.rect(s, TARJETA, s.get_rect().inflate(0, -4).move(0, -2), border_radius=16)
+        dibujo.rect(s, ui.ARENA_OSC, s.get_rect().inflate(0, -4).move(0, -2), 2, border_radius=16)
         y = 12
         for p in partes:
             s.blit(p, (20, y))

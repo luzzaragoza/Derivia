@@ -7,6 +7,8 @@ import random
 
 import pygame
 
+from . import lienzo as dibujo
+from .lienzo import Lienzo
 from .ui import BORDE
 
 NARANJA = (247, 152, 60)
@@ -177,12 +179,15 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
 
 
 def superficie(tam, animo="normal", ojos_cerrados=False, cola_paso=0, mirar=(0, 0), ropa=None):
+    from .lienzo import Lienzo, escala
     ropa = tuple(sorted(ROPA if ropa is None else ropa))
-    clave = (tam, animo, ojos_cerrados, cola_paso % 16, mirar, ropa)
+    e = escala()
+    clave = (tam, animo, ojos_cerrados, cola_paso % 16, mirar, ropa, e)
     if clave not in _CACHE:
         if len(_CACHE) > 500:
             _CACHE.clear()
-        _CACHE[clave] = _render(tam, animo, ojos_cerrados, cola_paso % 16, mirar, ropa)
+        # se dibuja al tamaño real en la pantalla (tam × escala): queda nítido
+        _CACHE[clave] = Lienzo.desde(_render(tam * e, animo, ojos_cerrados, cola_paso % 16, mirar, ropa), e)
     return _CACHE[clave]
 
 
@@ -247,17 +252,17 @@ class Gato:
         w = int(img.get_width() * (2 - estirar) * (1 if self.animo != "dormido" else 1.02))
         h = int(img.get_height() * respira * estirar)
         if (w, h) != img.get_size():
-            img = pygame.transform.smoothscale(img, (w, h))
+            img = dibujo.escalar(img, (w, h))
         dx = math.sin(self.t * 40) * 5 * (self.sacude / 0.4) if self.sacude else 0
         r = img.get_rect(midbottom=(pie[0] + dx, pie[1] - self.salto))
         if angulo:
             centro = r.center
-            img = pygame.transform.rotozoom(img, angulo, 1.0)
+            img = dibujo.rotar(img, angulo, 1.0)
             r = img.get_rect(center=centro)
         # sombra en el piso
-        sombra = pygame.Surface((int(tam * 0.8), int(tam * 0.14)), pygame.SRCALPHA)
+        sombra = Lienzo(int(tam * 0.8), int(tam * 0.14))
         alfa = int(70 * (1 - min(1, self.salto / (self.tam * 0.3))))
-        pygame.draw.ellipse(sombra, (60, 40, 30, alfa), sombra.get_rect())
+        dibujo.ellipse(sombra, (60, 40, 30, alfa), sombra.get_rect())
         sup.blit(sombra, sombra.get_rect(center=(pie[0], pie[1] - 2)))
         sup.blit(img, r)
         # extras
