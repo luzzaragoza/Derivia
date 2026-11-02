@@ -696,7 +696,16 @@ class CampoTexto:
         self.cursor = len(nuevo)
         self._cambio()
 
+    def _en_indice(self):
+        """¿El cursor está justo al final del índice de una raíz, raiz[3|]( )?"""
+        return self.texto[self.cursor:self.cursor + 2] == "]("
+
     def insertar(self, s, retroceso=0):
+        if s in ("(", "]", ")") and retroceso == 0 and self._en_indice():
+            self.cursor += 2      # terminaste el índice de la raíz: pasa adentro
+            self.t = 0
+            self._cambio()
+            return
         self.texto = self.texto[:self.cursor] + s + self.texto[self.cursor:]
         self.cursor += len(s) - retroceso
         self._cambio()
@@ -706,7 +715,8 @@ class CampoTexto:
         self.t = 0
 
     def derecha(self):
-        self.cursor = min(len(self.texto), self.cursor + 1)
+        # desde el índice de una raíz, la flecha salta directo adentro: raiz[3](|)
+        self.cursor = min(len(self.texto), self.cursor + (2 if self._en_indice() else 1))
         self.t = 0
 
     def borrar_atras(self):
@@ -743,9 +753,8 @@ class CampoTexto:
                 self.cursor = max(0, self.cursor - 1)
                 self.t = 0
                 return True
-            if e.key == pygame.K_RIGHT:
-                self.cursor = min(len(self.texto), self.cursor + 1)
-                self.t = 0
+            if e.key in (pygame.K_RIGHT, pygame.K_TAB):
+                self.derecha()
                 return True
             if e.key == pygame.K_HOME:
                 self.cursor = 0

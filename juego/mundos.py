@@ -132,10 +132,10 @@ def mundo_por_id(mid):
     raise KeyError(mid)
 
 
-def generar(mundo_id, nivel_idx, gen_nombre, semilla):
-    """Arma un ejercicio exacto a partir de su clave."""
+def generar(mundo_id, nivel_idx, gen_nombre, semilla, jefe=None):
+    """Arma un ejercicio exacto a partir de su clave. jefe=True: como en un jefe (sin pistas)."""
     nivel = mundo_por_id(mundo_id).niveles[nivel_idx]
-    ctx = Ctx(random.Random(semilla), nivel.modo, nivel.jefe, nivel.dificultad)
+    ctx = Ctx(random.Random(semilla), nivel.modo, nivel.jefe if jefe is None else jefe, nivel.dificultad)
     ej = GENERADORES[gen_nombre](ctx)
     ej.clave = {"mundo": mundo_id, "nivel": nivel_idx, "gen": gen_nombre, "semilla": semilla}
     return ej
@@ -180,5 +180,39 @@ def generar_nivel(mundo_id, nivel_idx, rng=None):
             sin_andamio = [p for p in ej.pasos if not p.repetitivo]
             if sin_andamio:
                 ej.pasos = sin_andamio
+        ejercicios.append(ej)
+    return ejercicios
+
+
+# ------------------------------------------------------------ desafío del jefe (saltear un mundo)
+EXTRA_JEFE_DESAFIO = 3          # ejercicios del jefe además de uno por cada nivel
+VIDAS_DESAFIO = 2
+MONEDAS_POR_EJERCICIO = 14      # lo que se gana en promedio por ejercicio (con racha)
+
+
+def monedas_de_regalo(mundo, progreso):
+    """Las monedas de los niveles que todavía no hiciste, como si los hubieras jugado."""
+    return sum(n.cantidad * MONEDAS_POR_EJERCICIO for i, n in enumerate(mundo.niveles)
+               if not progreso.aprobado(mundo.id, i))
+
+
+def generar_desafio(mundo_id, rng=None):
+    """Un ejercicio de cada nivel del mundo (directo, sin pasos guiados ni detective) y unos del jefe.
+    Todo en modo jefe: sin pistas."""
+    rng = rng or random.Random()
+    mundo = mundo_por_id(mundo_id)
+    ejercicios = []
+    for i, nivel in enumerate(mundo.niveles):
+        if nivel.jefe:
+            continue
+        gens = [g for g in nivel.generadores if "detective" not in g.__name__] or nivel.generadores
+        ej = generar(mundo_id, i, rng.choice(gens).__name__, rng.randrange(10**9), jefe=True)
+        ej.pasos = ej.pasos[-1:]
+        ejercicios.append(ej)
+    rng.shuffle(ejercicios)
+    i_jefe = len(mundo.niveles) - 1
+    for _ in range(EXTRA_JEFE_DESAFIO):
+        gen = rng.choice(mundo.niveles[i_jefe].generadores).__name__
+        ej = generar(mundo_id, i_jefe, gen, rng.randrange(10**9))
         ejercicios.append(ej)
     return ejercicios

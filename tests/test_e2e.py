@@ -151,6 +151,7 @@ def _pantallas(app):
         j = E.Juego(app, "1", 4 if jefe else 0)
         j.errores_log = []
         return E.FinNivel(app, j, gano, 3 if gano else 0)
+    pantallas.append(("Desafío", lambda: E.DesafioIntro(app, E.Mapa(app, "2"), MUNDOS[1])))
     pantallas += [("Fin ganado", lambda: fin(True, False)), ("Fin perdido", lambda: fin(False, False)),
                   ("Fin jefe", lambda: fin(True, True))]
     p.monedas = 5000
@@ -202,6 +203,68 @@ def _resolver(app, j, equivocarse):
             j.comprobar()
     if j.estado == "pregunta":
         raise AssertionError(f"no aceptó la respuesta correcta {sstr(p.esperado)} ({j.feedback})")
+
+
+def _jugar_hasta_el_final(app, j, equivocarse_siempre=False):
+    pasos = 0
+    while app.escena is j:
+        pasos += 1
+        assert pasos < 400, "no termina nunca"
+        if equivocarse_siempre and j.estado == "pregunta":
+            p = j.paso
+            if p.tipo == "opcion":
+                j.elegir([k for k, o in enumerate(p.opciones) if not o.correcta][0])
+            else:
+                j.campo.poner("")
+                escribir(app, "7" if p.chequeo == "numero" else "x+1")
+                j.comprobar()
+        else:
+            _resolver(app, j, False)
+        cuadros(app, 2)
+        if j.estado in ("bien", "revelado"):
+            j.continuar()
+        cuadros(app, 1)
+        if app.escena is j and j.estado == "sin_vidas":
+            j.continuar()
+
+
+def prueba_desafio_jefe():
+    app = nueva_app(nombre_gato="Mandarina", monedas=100,
+                    niveles={f"1-{i}": {"estrellas": 3, "puntos": 10} for i in range(5)} | {"2-0": {"estrellas": 1, "puntos": 5}})
+    p = app.progreso
+    m = MUNDOS[1]
+    assert not p.mundo_desbloqueado("3")
+    mapa = E.Mapa(app, "2")
+    app.cambiar(mapa, None)
+    cuadros(app, 3)
+    mapa.desafio()
+    cuadros(app, 5)
+    assert isinstance(app.escena, E.DesafioIntro)
+    regalo = sum(n.cantidad * 14 for i, n in enumerate(m.niveles) if i > 0)   # el 2-0 ya estaba hecho
+    app.escena.empezar()
+    cuadros(app, 5)
+    j = app.escena
+    assert j.desafio and j.jefe and j.vidas_max == 2
+    assert len(j.ejercicios) == sum(1 for n in m.niveles if not n.jefe) + 3
+    assert all(len(e.pasos) == 1 for e in j.ejercicios), "el desafío no tiene pasos guiados"
+    antes = p.monedas
+    _jugar_hasta_el_final(app, j)
+    assert isinstance(app.escena, E.FinNivel) and app.escena.gano
+    assert all(p.estrellas("2", i) == 3 for i in range(len(m.niveles))), "no quedaron todas con 3 estrellas"
+    assert p.monedas - antes >= regalo, f"no dio las monedas de regalo ({p.monedas - antes} < {regalo})"
+    assert j.bonus_desafio == regalo
+    assert p.mundo_desbloqueado("3"), "no abrió el mundo siguiente"
+    cuadros(app, 30)
+    # perdiendo: no se gana nada, y "Reintentar" vuelve a ser un desafío
+    app.cambiar(E.Juego(app, "3", None, desafio=True), None)
+    j = app.escena
+    _jugar_hasta_el_final(app, j, equivocarse_siempre=True)
+    assert isinstance(app.escena, E.FinNivel) and not app.escena.gano
+    assert not p.aprobado("3", 0), "perdiendo el desafío no se tiene que aprobar nada"
+    fin = app.escena
+    fin.botones[-1].accion()     # Reintentar
+    cuadros(app, 3)
+    assert isinstance(app.escena, E.Juego) and app.escena.desafio, "Reintentar tiene que volver al desafío"
 
 
 def prueba_jugar_todo():
@@ -264,7 +327,8 @@ def prueba_borrar_progreso():
     assert isinstance(app.escena, E.NombreGato)
 
 
-PRUEBAS = [prueba_arranque, prueba_tamaños, prueba_botones, prueba_borrar_progreso, prueba_jugar_todo]
+PRUEBAS = [prueba_arranque, prueba_tamaños, prueba_botones, prueba_borrar_progreso, prueba_desafio_jefe,
+           prueba_jugar_todo]
 
 
 def main():

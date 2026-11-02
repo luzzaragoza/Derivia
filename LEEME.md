@@ -77,7 +77,7 @@ Con Python instalado (paso 1 de arriba), hacé doble clic en **`jugar.bat`**.
 | e a la algo | `e^(2x)`, con paréntesis |
 | logaritmo natural | `ln(x)` |
 | raíz | `raiz(x)` |
-| raíz cúbica (o la que sea) | `raiz3(x)`, `raiz4(x)`, ... |
+| raíz cúbica (o la que sea) | `raiz[3](x)`, `raiz[4](x)`, ... (o corto: `raiz3(x)`). Con la tecla ⁿ√ primero escribís el índice y con → o ( pasás adentro |
 | fracción | `(x+1)/(x^2+1)` |
 | seno al cuadrado | `sen(x)^2` o `sen^2(x)` |
 | otras variables | `3x^2y + z` |

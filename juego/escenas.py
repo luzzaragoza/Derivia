@@ -16,7 +16,7 @@ from .mate import (C, ERRORES, ErrorEntrada, casi_igual, diagnosticar, diagnosti
 from .mate import x as VAR_X
 from .mate import y as VAR_Y
 from .mate import z as VAR_Z
-from .mundos import MUNDOS, generar, generar_nivel, mundo_por_id
+from .mundos import MUNDOS, VIDAS_DESAFIO, generar, generar_desafio, generar_nivel, monedas_de_regalo, mundo_por_id
 from .sonido import sonidos
 from .ui import (ALTO, ANCHO, ARENA, ARENA_OSC, BORDE, CORAL, DURAZNO, GRIS, LAVANDA, LAVANDA_OSC,
                  MADERA, MADERA_OSC, MENTA_OSC, ROSA_OSC, SOL, SOL_OSC, SUAVE, TARJETA, TINTA, Boton, CampoTexto)
@@ -360,6 +360,9 @@ class Mapa(Escena):
         abierto = any(p.desbloqueado(m.id, i) for i in range(len(m.niveles)))
         self.botones.append(Boton((20, 660, 220, 46), "Repasar este mundo", self.repasar_mundo, (186, 150, 236),
                                   tam=17, relieve=4, habilitado=abierto))
+        if p.desbloqueado(m.id, 0) and not p.aprobado(m.id, len(m.niveles) - 1):
+            self.botones.append(Boton((20, 604, 220, 46), "Desafío del jefe", self.desafio, CORAL, CREMA,
+                                      tam=17, relieve=4))
         for d, x in ((-1, ANCHO // 2 - 360), (1, ANCHO // 2 + 310)):
             destino = self.sel + d
             ok = 0 <= destino < len(MUNDOS) and p.mundo_desbloqueado(MUNDOS[destino].id)
@@ -399,6 +402,9 @@ class Mapa(Escena):
             claves[random.randrange(len(claves))] = random.choice(errores)
         random.shuffle(claves)
         self.app.cambiar(Juego(self.app, m.id, None, practica=claves, titulo_practica=f"Repaso · {m.tema}"), "ola")
+
+    def desafio(self):
+        self.app.cambiar(DesafioIntro(self.app, self, self.mundo), None)
 
     def alternar_todo(self):
         p = self.app.progreso
@@ -680,7 +686,7 @@ class Mapa(Escena):
 # operaciones, potencias y raíces, funciones. Los extras (y, z, +C, π, e) van al final.
 GRUPOS_TECLADO = [
     ("operaciones", [("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0), ("/", "/", 0), (r"(\;\;)", "()", 1)]),
-    ("potencias", [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1)]),
+    ("potencias", [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz[]()", 3)]),
     ("funciones", [(r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{n}", "e^()", 1), (r"\ln", "ln()", 1)]),
 ]
 COLORES_TECLADO = {"operaciones": (250, 238, 214), "potencias": (206, 238, 216), "funciones": (226, 214, 250),
@@ -695,9 +701,11 @@ X_GLOBO = 196
 class Juego(Escena):
     musica = "estudio"
 
-    def __init__(self, app, mundo_id, nivel_idx, practica=None, titulo_practica=None):
+    def __init__(self, app, mundo_id, nivel_idx, practica=None, titulo_practica=None, desafio=False):
         super().__init__(app)
         self.practica = practica is not None
+        self.desafio = desafio and not self.practica
+        self.bonus_desafio = 0
         self.practica_claves = practica
         self.repasos = set()
         self.errores_log = []
@@ -712,6 +720,15 @@ class Juego(Escena):
             self.vidas_max = 5
             self.titulo = titulo_practica or "Repaso del cuaderno"
             self.color = self.mundo.color if self.mundo else ui.ROSA
+        elif self.desafio:
+            # desafío del jefe: te salteás el mundo entero si le ganás
+            self.mundo = mundo_por_id(mundo_id)
+            self.nivel_idx = len(self.mundo.niveles) - 1
+            self.nivel = self.mundo.niveles[self.nivel_idx]
+            self.ejercicios = generar_desafio(mundo_id)
+            self.vidas_max = VIDAS_DESAFIO
+            self.titulo = f"{self.mundo.nombre} · Desafío del jefe"
+            self.color = self.mundo.color
         else:
             self.mundo = mundo_por_id(mundo_id)
             self.nivel = self.mundo.niveles[nivel_idx]
@@ -735,7 +752,8 @@ class Juego(Escena):
         self.fuego = Fueguito()
         self.gato = Gato(128)
         self.gato.reaccionar("feliz", 1.0)
-        self.charla = ("¡Es un jefe! Acá no hay pistas, pero vos podés." if self.jefe
+        self.charla = ("¡Desafío! Si le ganás al jefe, te salteás todo el mundo." if self.desafio
+                       else "¡Es un jefe! Acá no hay pistas, pero vos podés." if self.jefe
                        else random.choice(FRASES_INICIO))
         self.t_charla = 3.5
         self.sacudir = 0
@@ -1275,6 +1293,13 @@ class Juego(Escena):
             pos = orden.index(self.mundo.id)
             era_ultimo = self.nivel_idx == len(self.mundo.niveles) - 1
             ya = prog.aprobado(self.mundo.id, self.nivel_idx)
+            if self.desafio:
+                # ¡mundo salteado! todos los niveles con 3 estrellas y sus monedas, como si los hubieras jugado
+                estrellas = 3
+                self.bonus_desafio = monedas_de_regalo(self.mundo, prog)
+                prog.monedas += self.bonus_desafio
+                for k, n in enumerate(self.mundo.niveles):
+                    prog.registrar(self.mundo.id, k, 3, n.cantidad * 14)
             prog.registrar(self.mundo.id, self.nivel_idx, estrellas, self.puntos)
             if era_ultimo and not ya and pos + 1 < len(MUNDOS):
                 nuevo_mundo = MUNDOS[pos + 1]
@@ -1283,7 +1308,12 @@ class Juego(Escena):
     # ---------------------------------------------- loop
     @property
     def pos_monedas(self):
-        return (ANCHO - 230, 32)
+        """La moneda del contador: siempre a la izquierda de los corazones, según cuántas vidas haya
+        y lo ancho que sea el número (así nunca se pisan)."""
+        borde_corazones = ANCHO - 34 - (self.vidas_max - 1) * 38 - 18
+        ancho_num = ui.texto_borde(str(int(round(getattr(self, "monedas_vistas", 0)))), 24, CREMA, MADERA_OSC, 2).get_width()
+        ancho = max(22 + ancho_num, ui.texto(f"+{self.puntos} en este nivel", 12, CREMA, negrita=True).get_width() - 8)
+        return (min(ANCHO - 230, borde_corazones - 16 - ancho), 32)
 
     def evento(self, e):
         if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
@@ -1338,13 +1368,17 @@ class Juego(Escena):
         r = pygame.Rect(-10, -10, ANCHO + 20, 74)
         ui.tabla_madera(sup, r, radio=0)
         t = ui.texto_borde(self.titulo, 24, CREMA, MADERA_OSC, 2)
+        lugar = self.pos_monedas[0] - (90 if self.racha >= 2 else 20) - 248 - (80 if self.jefe else 0)
+        if t.get_width() > lugar:      # título largo: se achica para no chocar con monedas y racha
+            t = dibujo.escalar(t, (lugar, t.get_height() * lugar / t.get_width()))
         sup.blit(t, (248, 32 - t.get_height() // 2))
         x = 248 + t.get_width() + 12
         if self.jefe:
             et = ui.texto_borde("JEFE", 16, CREMA, ui.CORAL_OSC, 2)
             rr = pygame.Rect(x, 18, et.get_width() + 18, 28)
-            dibujo.rect(sup, CORAL, rr, border_radius=14)
-            dibujo.rect(sup, BORDE, rr, 2, border_radius=14)
+            if not (pincel.HAY_SKIA and ui._pegar(sup, pincel.pastilla(rr.width, rr.height, CORAL), rr.x, rr.y)):
+                dibujo.rect(sup, CORAL, rr, border_radius=14)
+                dibujo.rect(sup, BORDE, rr, 2, border_radius=14)
             sup.blit(et, et.get_rect(center=rr.center))
         # vidas
         x = ANCHO - 34
@@ -1512,7 +1546,8 @@ class FinNivel(Escena):
             m, i = juego.mundo, juego.nivel_idx
             principal = None
             if not gano:
-                principal = ("Reintentar", lambda: app.cambiar(Juego(app, m.id, i), "ola"), CORAL, CREMA)
+                principal = ("Reintentar", lambda: app.cambiar(Juego(app, m.id, i, desafio=juego.desafio), "ola"),
+                             CORAL, CREMA)
             elif i + 1 < len(m.niveles):
                 principal = ("Siguiente nivel", lambda: app.cambiar(Juego(app, m.id, i + 1), "ola"), CORAL, CREMA)
             elif nuevo_mundo:
@@ -1631,6 +1666,9 @@ class FinNivel(Escena):
                 ui.moneda(sup, (caja.right - 26, caja.centery), 14)
         y += 150
         mensajes = []
+        if j.bonus_desafio:
+            mensajes.append(f"¡Te salteaste el **{j.mundo.nombre}**! Todos sus niveles quedan con 3 estrellas "
+                            f"y te llevás **+{j.bonus_desafio} monedas** de regalo.")
         if j.puntos:
             mensajes.append(f"Ahora tenés **{self.app.progreso.monedas} monedas** para gastar en la tienda del michi.")
         if self.nuevo_mundo:
@@ -1803,7 +1841,7 @@ class Ayuda(Escena):
         ("e a la algo", "e^(2x)", ["e^(2x)"]),
         ("Logaritmo natural", "ln(x)", ["ln(x)"]),
         ("Raíz cuadrada", "raiz(x)", ["raiz(x)"]),
-        ("Raíz cúbica (o la que sea)", "raiz3(x)", ["raiz3(x)"]),
+        ("Raíz cúbica (o la que sea)", "raiz[3](x)", ["raiz[3](x)", "raiz3(x)"]),
         ("Fracción", "(x+1)/(x^2+1)", ["(x+1)/(x^2+1)"]),
         ("Seno al cuadrado", "sen(x)^2", ["sen(x)^2"]),
         ("Decimales", "0,5x", ["0,5x"]),
@@ -1977,6 +2015,56 @@ class Opciones(Escena):
             c.rect.move_ip(0, dy)
             c.dibujar(sup)
             c.rect.move_ip(0, -dy)
+        self.dibujar_botones(sup)
+
+
+# =============================================================== DESAFÍO DEL JEFE
+
+class DesafioIntro(Escena):
+    """Explica el desafío (saltear el mundo peleando con el jefe) antes de empezar."""
+
+    def __init__(self, app, previa, mundo):
+        super().__init__(app)
+        self.previa, self.mundo = previa, mundo
+        self.musica = getattr(previa, "musica", "isla")
+        self.foto = app.lienzo.copy()
+        velo = Lienzo(*(self.foto.get_size()))
+        velo.fill((40, 30, 40, 150))
+        self.foto.blit(velo, (0, 0))
+        self.t = 0.0
+        self.panel = pygame.Rect(ANCHO // 2 - 330, 110, 660, 500)
+        n = sum(1 for nv in mundo.niveles if not nv.jefe) + 3
+        self.texto = ui.rico(
+            f"**¿Te animás a saltear el {mundo.nombre}?**\n"
+            f"Peleás directo contra el jefe: **{n} ejercicios** (uno de cada nivel y {3} del jefe), "
+            f"**sin pistas**, sin saltear y con **solo {VIDAS_DESAFIO} vidas**.\n\n"
+            f"Si ganás: todos los niveles quedan con **3 estrellas**, te llevás "
+            f"**+{monedas_de_regalo(mundo, app.progreso)} monedas** de regalo y se abre el mundo siguiente.\n"
+            "Si perdés, no perdés nada: podés volver a intentar o jugar el mundo normal.",
+            21, TINTA, ancho=560, centrado=True, color_negrita=ui.CORAL_OSC)
+        cx, y = self.panel.centerx, self.panel.bottom - 88
+        self.botones = [Boton((cx - 250, y, 240, 60), "Mejor no", self.atras, ARENA, TINTA, tam=21,
+                              tecla=[pygame.K_ESCAPE]),
+                        Boton((cx + 10, y, 240, 60), "¡Vamos!", self.empezar, CORAL, CREMA, tam=23,
+                              tecla=[pygame.K_RETURN, pygame.K_KP_ENTER])]
+
+    def empezar(self):
+        sonidos.tocar("jefe")
+        self.app.cambiar(Juego(self.app, self.mundo.id, None, desafio=True), "ola")
+
+    def atras(self):
+        self.app.cambiar(self.previa, None)
+
+    def actualizar(self, dt):
+        self.t += dt
+
+    def dibujar(self, sup):
+        sup.blit(self.foto, (0, 0))
+        k = rebote(min(1.0, self.t / 0.3))
+        panel = self.panel.move(0, int((1 - k) * 60))
+        ui.tarjeta(sup, panel, ui.PERGAMINO, 26, ui.ARENA_OSC, 8)
+        letrero(sup, (panel.centerx - 200, panel.top - 26, 400, 64), "Desafío del jefe", 28)
+        sup.blit(self.texto, self.texto.get_rect(midtop=(panel.centerx, panel.top + 70)))
         self.dibujar_botones(sup)
 
 

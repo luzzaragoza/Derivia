@@ -87,7 +87,8 @@ def _potencia_de_funcion(s):
 
 
 def _raices_n(s):
-    """sqrt3(x) -> ((x)^(1/3)): raíz n-ésima (la escribís raiz3(x), raiz4(x), ...)."""
+    """Raíz n-ésima -> potencia: sqrt[3](x) o sqrt3(x) -> ((x)^(1/3)).
+    Se escribe raiz[3](x) (primero el índice, después lo de adentro) o, más corto, raiz3(x)."""
     patron = re.compile(r"sqrt\s*(\d+)\s*\(")
     while True:
         m = patron.search(s)
@@ -125,8 +126,17 @@ def _evaluar_numeros(e):
         return e
 
 
+def _indice_raiz(s):
+    """raiz[3](x) -> raiz3(x). Va antes de convertir corchetes en paréntesis."""
+    if re.search(r"ra[ií]z\s*\[\s*\]", s):
+        raise ErrorEntrada("Poné el índice de la raíz entre los corchetes: raiz[3](x) es la raíz cúbica.")
+    if re.search(r"ra[ií]z\s*\[\s*[^\]\d\s]", s):
+        raise ErrorEntrada("El índice de la raíz tiene que ser un número, por ejemplo raiz[3](x).")
+    return re.sub(r"ra[ií]z\s*\[\s*(\d+)\s*\]", r"raiz\1", s)
+
+
 def normalizar(texto):
-    s = texto.strip().lower()
+    s = _indice_raiz(texto.strip().lower())
     for viejo, nuevo in _CARACTERES.items():
         s = s.replace(viejo, nuevo)
     # el punto multiplica (como en la carpeta: 2.x); los decimales van con coma (0,5)
