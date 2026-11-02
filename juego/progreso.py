@@ -14,9 +14,21 @@ def _carpeta():
         base = Path(os.environ.get("APPDATA", Path.home()))
     else:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    carpeta = base / "Calculandia"
+    carpeta = base / "Derivia"
     carpeta.mkdir(parents=True, exist_ok=True)
+    _migrar(base / "Calculandia" / "progreso.json", carpeta / "progreso.json")
     return carpeta
+
+
+def _migrar(viejo, nuevo):
+    """El juego antes se llamaba Calculandia: si hay progreso viejo y todavía no hay
+    nuevo, se copia (el archivo viejo no se toca)."""
+    if nuevo.exists() or not viejo.exists():
+        return
+    try:
+        nuevo.write_bytes(viejo.read_bytes())
+    except OSError:
+        pass
 
 
 def _clave_nivel(mundo_id, idx):

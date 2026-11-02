@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Receta de PyInstaller para armar Calculandia.exe (un solo archivo, sin consola).
+# Receta de PyInstaller para armar Derivia.exe (un solo archivo, sin consola).
 
 from PyInstaller.utils.hooks import collect_data_files
 
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Calculandia",
+    name="Derivia",
     debug=False,
     strip=False,
     upx=False,

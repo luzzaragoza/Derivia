@@ -1,4 +1,4 @@
-# Calculandia
+# Derivia
 
 Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regla de la potencia hasta integrales triples en esféricas.
 
@@ -36,9 +36,9 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 
 1. Instalá Python desde https://www.python.org/downloads/ (la 3.12 o una más nueva).
    En el instalador **marcá la casilla "Add python.exe to PATH"**.
-2. Descomprimí la carpeta `calculandia` donde quieras.
+2. Descomprimí la carpeta `derivia` donde quieras.
 3. Hacé doble clic en **`construir_exe.bat`**. Tarda unos minutos la primera vez.
-4. Cuando termina, el juego queda en **`dist\Calculandia.exe`**. Copialo al Escritorio y listo:
+4. Cuando termina, el juego queda en **`dist\Derivia.exe`**. Copialo al Escritorio y listo:
    desde ahí se abre con doble clic, sin necesitar nada más.
 
 > La primera vez que lo abras, Windows puede mostrar "Windows protegió su PC" porque el
@@ -70,7 +70,9 @@ Si escribís algo que no se entiende, no perdés vidas.
 
 ## Dónde se guarda el progreso
 
-En `%APPDATA%\Calculandia\progreso.json`. Si lo borrás, el juego arranca de cero.
+En `%APPDATA%\Derivia\progreso.json`. Si lo borrás, el juego arranca de cero.
+
+Si venías jugando cuando el juego se llamaba Calculandia, la primera vez que abras Derivia se copia solo tu progreso de `%APPDATA%\Calculandia`.
 
 ## Para programar
 

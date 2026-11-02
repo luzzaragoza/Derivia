@@ -109,8 +109,8 @@ class Menu(Escena):
         for f in self.flotantes:
             s = ui.texto(f["s"], f["tam"], f["color"], negrita=True)
             sup.blit(s, (f["x"] + 12 * math.sin(self.t * 0.7 + f["fase"]), f["y"]))
-        titulo = ui.texto("Calculandia", 92, LAVANDA_OSC, negrita=True)
-        sombra = ui.texto("Calculandia", 92, LAVANDA, negrita=True)
+        titulo = ui.texto("Derivia", 96, LAVANDA_OSC, negrita=True)
+        sombra = ui.texto("Derivia", 96, LAVANDA, negrita=True)
         centrar(sup, sombra, 108 + 5, ANCHO // 2 + 4)
         centrar(sup, titulo, 108)
         centrar(sup, ui.texto("Derivadas e integrales, nivel por nivel", 24, SUAVE), 228)

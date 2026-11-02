@@ -1,4 +1,4 @@
-"""Calculandia: un juego para aprender a derivar (y pronto integrar).
+"""Derivia: un juego para aprender a derivar e integrar.
 
 Para jugar:  python main.py"""
 
@@ -21,14 +21,14 @@ def main():
     import pygame
 
     pygame.init()
-    pygame.display.set_caption("Calculandia")
+    pygame.display.set_caption("Derivia")
     pygame.display.set_icon(_icono())
     pantalla = pygame.display.set_mode((1280, 720), pygame.SCALED | pygame.RESIZABLE)
 
     # pantalla de carga mientras se importan SymPy y matplotlib (tardan unos segundos)
     pantalla.fill((250, 246, 240))
     f = pygame.font.Font(None, 56)
-    t = f.render("Cargando Calculandia...", True, (112, 88, 196))
+    t = f.render("Cargando Derivia...", True, (112, 88, 196))
     pantalla.blit(t, t.get_rect(center=(640, 360)))
     pygame.display.flip()
     pygame.event.pump()

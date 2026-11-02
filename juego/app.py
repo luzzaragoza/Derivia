@@ -24,7 +24,7 @@ class App:
 
     def correr(self):
         # Solo para pruebas automáticas: guarda una captura del menú y se cierra.
-        captura = os.environ.get("CALCULANDIA_CAPTURA")
+        captura = os.environ.get("DERIVIA_CAPTURA")
         cuadros = 0
         while self.corriendo:
             cuadros += 1
