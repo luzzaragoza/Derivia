@@ -139,9 +139,12 @@ class App:
         tipo, foto, t, dur = self.transicion
         t += dt
         k = min(1.0, t / dur)
-        capa = Lienzo(ANCHO, ALTO, sup=destino.subsurface(pygame.Rect(int(self.dx), int(self.dy),
-                                                                     self.lienzo.sup.get_width(),
-                                                                     self.lienzo.sup.get_height())))
+        zona = pygame.Rect(int(self.dx), int(self.dy), self.lienzo.sup.get_width(),
+                           self.lienzo.sup.get_height()).clip(destino.get_rect())
+        if zona.width < 1 or zona.height < 1:
+            self.transicion = None
+            return
+        capa = Lienzo(ANCHO, ALTO, sup=destino.subsurface(zona))
         if tipo == "fundido":
             foto.set_alpha(int(255 * (1 - suave(k))))
             capa.blit(foto, (0, 0))

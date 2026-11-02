@@ -141,11 +141,17 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
     # patas de atrás
     elipse(R(52, 196, 38, 20), NARANJA)
     elipse(R(110, 196, 38, 20), NARANJA)
-    prendas.dibujar_capa("cuerpo", ropa, lz)
-    # ---- brazos (los levantados se dibujan después de la cabeza)
+    # ---- patas de adelante: van debajo de la ropa (un vestido las tapa y solo asoman los pies)
     if not brazos:
-        elipse(R(72, 188, 26, 22), CREMA)
-        elipse(R(102, 188, 26, 22), CREMA)
+        for x in (84, 116):
+            trazo([(x, 162), (x - (1 if x < 100 else -1), 186), (x, 203)], NARANJA, 9)
+    prendas.dibujar_capa("cuerpo", ropa, lz)
+    # ---- pies (los brazos levantados se dibujan después de la cabeza)
+    if not brazos:
+        for x in (84, 116):
+            elipse(R(x - 15, 197, 30, 15), CREMA)
+            for dx in (-5, 5):
+                d.line(s, NARANJA_OSC, P(x + dx, 198), P(x + dx, 203), _g(2.5))
     # ---- orejas
     caida = 0.45 if triste else 0.0
     oreja_i = [(38, 66), (50, 6), (90, 40)]

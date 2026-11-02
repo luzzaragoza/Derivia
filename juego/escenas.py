@@ -667,8 +667,8 @@ class Mapa(Escena):
 # (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor) — como en la calculadora
 TECLADO = [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1),
            (r"(\;\;)", "()", 1), ("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0), ("/", "/", 0),
-           (r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{x}", "e^()", 1), (r"\ln", "ln()", 1)]
-FUNCIONES_TECLADO = (r"\mathrm{sen}", r"\cos", "e^{x}", r"\ln")
+           (r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{n}", "e^()", 1), (r"\ln", "ln()", 1)]
+FUNCIONES_TECLADO = (r"\mathrm{sen}", r"\cos", "e^{n}", r"\ln")
 NUMEROS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ","]
 
 PIE_GATO = (96, ALTO - 8)

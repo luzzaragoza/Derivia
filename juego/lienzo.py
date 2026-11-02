@@ -48,7 +48,8 @@ class Lienzo:
         self.e = e if e is not None else escala()
         self.w, self.h = w, h
         if sup is None:
-            tam = (max(1, math.ceil(w * self.e)), max(1, math.ceil(h * self.e)))
+            # (el -1e-6 evita que un redondeo de la escala agregue un píxel de más)
+            tam = (max(1, math.ceil(w * self.e - 1e-6)), max(1, math.ceil(h * self.e - 1e-6)))
             sup = pygame.Surface(tam, pygame.SRCALPHA if alfa else 0)
         self.sup = sup
         self._otras = None
