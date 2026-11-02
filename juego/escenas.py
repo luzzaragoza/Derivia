@@ -719,6 +719,7 @@ class Juego(Escena):
         self.t_corazon = 10.0
         self.ultimo_tic = None
         self.monedas_vistas = float(app.progreso.monedas)
+        self.salteo_usado = False
         self.campo = CampoTexto((0, 0, 560, 58), al_enter=self.comprobar, al_cambiar=self._previsualizar)
         pygame.key.start_text_input()
         self.empezar_ejercicio()
@@ -816,6 +817,40 @@ class Juego(Escena):
         else:
             nuevo = Juego(self.app, self.mundo.id, self.nivel_idx)
         self.app.cambiar(nuevo, "fundido")
+
+    COSTO_SALTEAR = 30
+
+    def _boton_saltear(self, rect):
+        """Saltear el ejercicio: una vez por nivel, cuesta monedas (en los jefes no se puede)."""
+        if self.jefe:
+            txt, ok = "Saltear: no (jefe)", False
+        elif self.salteo_usado:
+            txt, ok = "Ya salteaste uno", False
+        else:
+            txt = f"Saltear (−{self.COSTO_SALTEAR})"
+            ok = self.app.progreso.monedas >= self.COSTO_SALTEAR
+        return Boton(rect, txt, self.saltear, (186, 150, 236), TINTA, tam=17, habilitado=ok, sonido="salto")
+
+    def saltear(self):
+        if self.salteo_usado or self.jefe or self.estado != "pregunta":
+            return
+        prog = self.app.progreso
+        if prog.monedas < self.COSTO_SALTEAR:
+            return
+        prog.monedas -= self.COSTO_SALTEAR
+        self.salteo_usado = True
+        self.fx.texto(self.pos_monedas[0] + 30, self.pos_monedas[1] + 30, f"−{self.COSTO_SALTEAR}", ui.CORAL, 24,
+                      sube=-20, dur=1.0)
+        prog.anotar_error(self.ej.clave, self.ej.formula)     # para repasarlo después
+        self.al_cuaderno += 1
+        self.resultados.append("salteado")
+        self.racha = 0
+        self.gato.reaccionar("sorpresa", 1.0, saltar=False)
+        self.i += 1
+        if self.i >= len(self.ejercicios):
+            self.terminar_nivel()
+        else:
+            self.empezar_ejercicio()
 
     def _boton_pista(self, rect):
         """El botón de pista siempre está, así se entiende cuándo se puede usar."""
@@ -921,9 +956,10 @@ class Juego(Escena):
                         x += 52
                     y += 50
                 y += 6
-                x = cx - (290 + 18 + 230) // 2
+                x = cx - (290 + 14 + 190 + 14 + 230) // 2
                 self.botones.append(self._boton_pista((x, y, 290, 52)))
-                self.botones.append(Boton((x + 308, y, 230, 52), "Comprobar  ↵", self.comprobar, CORAL, CREMA,
+                self.botones.append(self._boton_saltear((x + 304, y, 190, 52)))
+                self.botones.append(Boton((x + 508, y, 230, 52), "Comprobar  ↵", self.comprobar, CORAL, CREMA,
                                           tam=21, sonido=None))
                 y += 64
         else:
@@ -946,7 +982,8 @@ class Juego(Escena):
                 self.botones.append(b)
             y += ((len(ops) + 1) // 2) * (alto + 16)
             if respondiendo:
-                self.botones.append(self._boton_pista((cx - 145, y, 290, 46)))
+                self.botones.append(self._boton_pista((cx - 247, y, 290, 46)))
+                self.botones.append(self._boton_saltear((cx + 57, y, 190, 46)))
                 y += 58
         # globito del gato: feedback, pista o charla
         self.panel = None
@@ -1184,7 +1221,7 @@ class Juego(Escena):
             self.empezar_ejercicio()
 
     def terminar_nivel(self):
-        faltas = self.errores + self.pistas_usadas
+        faltas = self.errores + self.pistas_usadas + (1 if self.salteo_usado else 0)
         estrellas = 3 if faltas == 0 else (2 if faltas <= 2 else 1)
         nuevo_mundo = None
         if not self.practica:
@@ -1302,9 +1339,9 @@ class Juego(Escena):
         for k in range(n):
             c = (x0 + k * sep, 86)
             if k < len(self.resultados):
-                bien = self.resultados[k] == "bien"
+                color = {"bien": ui.PASTO, "salteado": (186, 150, 236)}.get(self.resultados[k], CORAL)
                 pygame.draw.circle(sup, BORDE, c, 10)
-                pygame.draw.circle(sup, ui.PASTO if bien else CORAL, c, 8)
+                pygame.draw.circle(sup, color, c, 8)
             elif k == self.i:
                 rr = 10 + 2 * math.sin(self.t * 5)
                 pygame.draw.circle(sup, BORDE, c, rr + 2)
@@ -2070,7 +2107,7 @@ class Tienda(Escena):
 
 class NombreGato(Escena):
     permite_m = False
-    SUGERENCIAS = ["Mandarina", "Pancho", "Michi", "Tostado", "Derivado", "Sirope"]
+    SUGERENCIA = "Derivia"
 
     def __init__(self, app, primera_vez=False):
         super().__init__(app)
@@ -2094,10 +2131,8 @@ class NombreGato(Escena):
         if not self.primera_vez:
             self.botones.append(Boton((24, 22, 128, 50), "Volver", self.atras, DURAZNO, tam=22))
         x0 = 560
-        for k, nombre in enumerate(self.SUGERENCIAS):
-            fila, col = divmod(k, 3)
-            self.botones.append(Boton((x0 + col * 176, 400 + fila * 62, 164, 48), nombre,
-                                      (lambda n=nombre: self.campo.poner(n)), ARENA, tam=19, relieve=4, sonido="tecla"))
+        self.botones.append(Boton((x0 + 176, 410, 164, 50), self.SUGERENCIA,
+                                  (lambda: self.campo.poner(self.SUGERENCIA)), ARENA, tam=20, relieve=4, sonido="tecla"))
         self.boton_listo = Boton((x0 + 90, 548, 340, 66), "¡Listo!", self.listo, CORAL, CREMA, tam=28,
                                  habilitado=bool(self.campo.texto.strip()))
         self.botones.append(self.boton_listo)
@@ -2156,7 +2191,7 @@ class NombreGato(Escena):
         rect = pygame.Rect(530, 270, 580, 370)
         ui.tarjeta(sup, rect, ui.PERGAMINO, 24, ui.ARENA_OSC, 6)
         self.campo.dibujar(sup)
-        sup.blit(ui.texto("O elegí uno:", 18, SUAVE, negrita=True), (560, 372))
+        sup.blit(ui.texto("Sugerencia:", 18, SUAVE, negrita=True), (560, 422))
         self.dibujar_botones(sup)
         self.fx.dibujar(sup)
 
