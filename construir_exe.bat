@@ -1,5 +1,5 @@
 @echo off
-REM Arma Derivia.exe dentro de la carpeta dist
+REM Arma el juego en la carpeta dist\Derivia (sin instalador; para el instalador: construir_instalador.bat)
 cd /d "%~dp0"
 if not exist .venv (
   echo Creando el entorno de Python...
@@ -14,7 +14,7 @@ pip install skia-python || echo (No se pudo instalar Skia: el juego va a usar lo
 pyinstaller --noconfirm --clean derivia.spec
 echo.
 echo ==========================================================
-echo  Listo! El juego esta en:  dist\Derivia.exe
-echo  Podes copiarlo a donde quieras (por ejemplo al Escritorio).
+echo  Listo! El juego esta en la carpeta  dist\Derivia
+echo  Se abre con Derivia.exe. Si lo moves, move la carpeta entera.
 echo ==========================================================
 pause
