@@ -41,6 +41,7 @@ class Progreso:
         self.niveles = {}          # "1-0": {"estrellas": 3, "puntos": 120}
         self.cuaderno = []         # [{"clave": {...}, "formula": "...", "repasos": 0}]
         self.todo_desbloqueado = False
+        self.sonido = True
         self.cargar()
 
     # ------------------------------------------------ disco
@@ -52,10 +53,11 @@ class Progreso:
         self.niveles = datos.get("niveles", {})
         self.cuaderno = datos.get("cuaderno", [])
         self.todo_desbloqueado = datos.get("todo_desbloqueado", False)
+        self.sonido = datos.get("sonido", True)
 
     def guardar(self):
         datos = {"niveles": self.niveles, "cuaderno": self.cuaderno,
-                 "todo_desbloqueado": self.todo_desbloqueado}
+                 "todo_desbloqueado": self.todo_desbloqueado, "sonido": self.sonido}
         tmp = self.archivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
         tmp.replace(self.archivo)

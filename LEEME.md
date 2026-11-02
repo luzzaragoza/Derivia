@@ -29,6 +29,10 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 - **Integrales**: se corrigen derivando tu respuesta, así que vale cualquier primitiva (con o sin `+ C`).
 - **Integrales dobles**: te muestra el dibujo de la región.
 - Abajo del cuadro de texto aparece **"Leo: …"** con cómo se entendió lo que escribiste.
+- **Un gato naranja** te acompaña: festeja los aciertos, se pone triste con los errores y te da las pistas.
+- **Mapa de islas**: cada mundo es una isla con un camino de niveles.
+- **Sonidos 8-bit** (se prenden y apagan con la tecla **M** o con el botón del parlante), confeti, monedas que vuelan,
+  racha con fueguito y transiciones con olas.
 
 ## Cómo jugar en Windows
 
@@ -83,9 +87,18 @@ juego/gen_integrales.py  derivadas parciales e integrales de una variable (mundo
 juego/gen_multiples.py   integrales dobles y triples (mundos 8 y 9)
 juego/mundos.py       la lista de mundos y niveles
 juego/escenas.py      pantallas (menú, mapa, nivel, resultados, cuaderno, ayuda)
-juego/ui.py           dibujo: fórmulas, botones, cuadro de texto
+juego/ui.py           dibujo: colores, tipografías, fórmulas, botones, cuadro de texto
+juego/gato.py         el gato (dibujado con formas) y sus animaciones
+juego/paisaje.py      cielo, mar, islas, palmeras y el pergamino de fondo
+juego/fx.py           confeti, chispas, monedas que vuelan, fueguito
+juego/sonido.py       los sonidos 8-bit (se sintetizan al arrancar, no hay archivos de audio)
 juego/progreso.py     guardado
 tests/                pruebas: genera cientos de ejercicios y verifica que todo esté bien
 ```
 
 Para correr las pruebas: `python tests/test_ejercicios.py`
+
+## Créditos
+
+La tipografía de los títulos es **Fredoka One** (Milena Brandão), con licencia SIL Open Font License:
+ver `juego/assets/fuentes/OFL.txt`.

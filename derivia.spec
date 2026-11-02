@@ -4,6 +4,7 @@
 from PyInstaller.utils.hooks import collect_data_files
 
 datos = collect_data_files("matplotlib", subdir="mpl-data/fonts")
+datos += [("juego/assets", "juego/assets")]   # tipografía Fredoka One
 
 a = Analysis(
     ["main.py"],

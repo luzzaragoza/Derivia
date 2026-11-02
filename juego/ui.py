@@ -16,24 +16,45 @@ from matplotlib.mathtext import MathTextParser  # noqa: E402
 
 ANCHO, ALTO = 1280, 720
 
-# ------------------------------------------------------------ paleta pastel
-FONDO = (250, 246, 240)
-FONDO_2 = (243, 237, 229)
-TARJETA = (255, 255, 255)
-TINTA = (52, 48, 72)
-SUAVE = (128, 122, 148)
-GRIS = (214, 210, 220)
-LAVANDA = (200, 186, 240)
-LAVANDA_OSC = (112, 88, 196)
-MENTA = (186, 230, 208)
-MENTA_OSC = (38, 132, 92)
-ROSA = (250, 200, 210)
-ROSA_OSC = (196, 62, 98)
-DURAZNO = (252, 214, 172)
-DURAZNO_OSC = (190, 110, 40)
-AMARILLO = (252, 226, 130)
-AMARILLO_OSC = (214, 160, 20)
-CELESTE = (186, 214, 244)
+# ------------------------------------------------------------ paleta "aventura"
+CIELO_ARRIBA = (120, 200, 234)
+CIELO_ABAJO = (206, 238, 242)
+MAR = (64, 182, 196)
+MAR_OSC = (34, 132, 158)
+ESPUMA = (228, 250, 246)
+ARENA = (246, 226, 182)
+ARENA_OSC = (214, 178, 118)
+PASTO = (122, 196, 106)
+PASTO_OSC = (70, 148, 72)
+CORAL = (250, 124, 104)
+CORAL_OSC = (206, 78, 64)
+SOL = (255, 206, 84)
+SOL_OSC = (222, 150, 24)
+MADERA = (170, 112, 66)
+MADERA_OSC = (110, 68, 38)
+NARANJA = (247, 152, 60)
+PERGAMINO = (255, 248, 230)
+PERGAMINO_2 = (248, 236, 206)
+BORDE = (92, 62, 46)            # contorno "ilustrado"
+
+# nombres que usa el resto del juego (significado, no color)
+FONDO = (250, 240, 214)
+FONDO_2 = (241, 226, 192)
+TARJETA = (255, 251, 240)
+TINTA = (64, 46, 40)
+SUAVE = (140, 112, 92)
+GRIS = (206, 196, 180)
+LAVANDA = (126, 214, 218)        # acción principal (turquesa)
+LAVANDA_OSC = (24, 124, 140)
+MENTA = (178, 228, 150)          # bien (verde hoja)
+MENTA_OSC = (52, 136, 64)
+ROSA = (255, 190, 176)           # mal (coral)
+ROSA_OSC = CORAL_OSC
+DURAZNO = (253, 214, 160)
+DURAZNO_OSC = (200, 118, 40)
+AMARILLO = (255, 216, 110)
+AMARILLO_OSC = SOL_OSC
+CELESTE = (166, 218, 240)
 
 
 def oscurecer(c, f=0.8):
@@ -46,21 +67,74 @@ def aclarar(c, f=0.25):
 
 # ------------------------------------------------------------ fuentes
 _DIR_FUENTES = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
+_FREDOKA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fuentes", "FredokaOne-Regular.ttf")
 _FUENTES = {}
+_GLIFOS = {}
 
 
-def fuente(tam, negrita=False, mono=False):
-    clave = (tam, negrita, mono)
+def fuente(tam, negrita=False, mono=False, dejavu=False):
+    """negrita = Fredoka One (títulos, botones, etiquetas); si no, DejaVu Sans (texto largo)."""
+    clave = (tam, negrita, mono, dejavu)
     if clave not in _FUENTES:
-        nombre = "DejaVuSansMono" if mono else "DejaVuSans"
-        if negrita:
-            nombre += "-Bold"
-        _FUENTES[clave] = pygame.font.Font(os.path.join(_DIR_FUENTES, nombre + ".ttf"), tam)
+        if negrita and not mono and not dejavu and os.path.exists(_FREDOKA):
+            _FUENTES[clave] = pygame.font.Font(_FREDOKA, int(tam * 1.08))
+        else:
+            nombre = "DejaVuSansMono" if mono else "DejaVuSans"
+            if negrita:
+                nombre += "-Bold"
+            _FUENTES[clave] = pygame.font.Font(os.path.join(_DIR_FUENTES, nombre + ".ttf"), tam)
     return _FUENTES[clave]
 
 
+def _fredoka_tiene(cadena):
+    """Fredoka One no trae π, √, ∫, flechas, etc.: en ese caso se usa DejaVu."""
+    f = fuente(20, True)
+    for ch in set(cadena):
+        if ch not in _GLIFOS:
+            if ch.isspace() or ord(ch) < 0x250:
+                _GLIFOS[ch] = True
+            else:
+                nada = pygame.image.tobytes(f.render("\ue000", True, (0, 0, 0)), "RGBA")
+                _GLIFOS[ch] = pygame.image.tobytes(f.render(ch, True, (0, 0, 0)), "RGBA") != nada
+        if not _GLIFOS[ch]:
+            return False
+    return True
+
+
+def fuente_para(cadena, tam, negrita=False, mono=False):
+    if negrita and not mono and not _fredoka_tiene(cadena):
+        return fuente(tam, True, dejavu=True)
+    return fuente(tam, negrita, mono)
+
+
 def texto(cadena, tam=22, color=TINTA, negrita=False, mono=False):
-    return fuente(tam, negrita, mono).render(cadena, True, color)
+    return fuente_para(cadena, tam, negrita, mono).render(cadena, True, color)
+
+
+_CACHE_BORDE = {}
+
+
+def texto_borde(cadena, tam, color, color_borde=BORDE, grosor=3, sombra=True):
+    """Texto de título con contorno (y sombrita), estilo videojuego."""
+    clave = (cadena, tam, color, color_borde, grosor, sombra)
+    if clave in _CACHE_BORDE:
+        return _CACHE_BORDE[clave]
+    f = fuente_para(cadena, tam, True)
+    base = f.render(cadena, True, color)
+    contorno = f.render(cadena, True, color_borde)
+    w, h = base.get_width() + 2 * grosor, base.get_height() + 2 * grosor + (grosor if sombra else 0)
+    sup = pygame.Surface((w, h), pygame.SRCALPHA)
+    pasos = max(12, grosor * 6)
+    if sombra:
+        for k in range(pasos):
+            a = math.tau * k / pasos
+            sup.blit(contorno, (grosor + math.cos(a) * grosor, grosor * 2 + math.sin(a) * grosor))
+    for k in range(pasos):
+        a = math.tau * k / pasos
+        sup.blit(contorno, (grosor + math.cos(a) * grosor, grosor + math.sin(a) * grosor))
+    sup.blit(base, (grosor, grosor))
+    _CACHE_BORDE[clave] = sup
+    return sup
 
 
 # ------------------------------------------------------------ fórmulas
@@ -185,7 +259,7 @@ def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.
             fm = formula(fracciones_grandes(cont), int(tam * 1.18), color)
             sup, arriba, abajo = fm.sup, fm.arriba, fm.abajo
         else:
-            fu = fuente(tam, neg)
+            fu = fuente_para(cont, tam, neg)
             sup = fu.render(cont, True, (color_negrita or color) if neg else color)
             arriba, abajo = fu.get_ascent(), -fu.get_descent()
         sep = espacio_px if (esp and renglones[-1]) else 0
@@ -224,42 +298,86 @@ def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.
 def caja(sup, rect, color, radio=16, sombra=True, borde=None, grosor=2):
     rect = pygame.Rect(rect)
     if sombra:
-        s = rect.move(0, 4)
-        pygame.draw.rect(sup, oscurecer(color, 0.86) if color != TARJETA else (226, 220, 214), s, border_radius=radio)
+        s = rect.move(0, 5)
+        pygame.draw.rect(sup, oscurecer(color, 0.78), s, border_radius=radio)
     pygame.draw.rect(sup, color, rect, border_radius=radio)
     if borde:
         pygame.draw.rect(sup, borde, rect, grosor, border_radius=radio)
 
 
-def corazon(sup, centro, tam, color):
+def tarjeta(sup, rect, color=TARJETA, radio=18, borde=ARENA_OSC, alto_base=6):
+    """Tarjeta 'de juego': cara clara, base más oscura abajo y contorno."""
+    rect = pygame.Rect(rect)
+    base = rect.move(0, alto_base)
+    pygame.draw.rect(sup, oscurecer(borde, 0.9), base, border_radius=radio)
+    pygame.draw.rect(sup, color, rect, border_radius=radio)
+    pygame.draw.rect(sup, borde, rect, 3, border_radius=radio)
+
+
+def destello(sup, centro, tam, color=(255, 240, 160)):
+    """Estrellita de 4 puntas (brillo)."""
     cx, cy = centro
-    r = tam * 0.28
-    pygame.draw.circle(sup, color, (int(cx - r), int(cy - r * 0.3)), int(r + 1))
-    pygame.draw.circle(sup, color, (int(cx + r), int(cy - r * 0.3)), int(r + 1))
-    pygame.draw.polygon(sup, color, [(cx - 2 * r - 0.5, cy - r * 0.05), (cx + 2 * r + 0.5, cy - r * 0.05),
-                                     (cx, cy + tam * 0.5)])
+    t = tam / 2
+    a = tam / 7
+    pygame.draw.polygon(sup, color, [(cx, cy - t), (cx + a, cy - a), (cx + t, cy), (cx + a, cy + a),
+                                     (cx, cy + t), (cx - a, cy + a), (cx - t, cy), (cx - a, cy - a)])
 
 
-def estrella(sup, centro, radio, color, borde=None):
+def corazon(sup, centro, tam, color, borde=BORDE, brillo=True):
+    cx, cy = centro
+    r = tam * 0.27
+
+    def forma(c, d=0):
+        pygame.draw.circle(sup, c, (int(cx - r), int(cy - r * 0.35)), int(r + 1 + d))
+        pygame.draw.circle(sup, c, (int(cx + r), int(cy - r * 0.35)), int(r + 1 + d))
+        pygame.draw.polygon(sup, c, [(cx - 2 * r - 0.6 - d, cy - r * 0.15), (cx + 2 * r + 0.6 + d, cy - r * 0.15),
+                                     (cx, cy + tam * 0.52 + d * 1.4)])
+    if borde:
+        forma(borde, 2)
+    forma(color)
+    if brillo and color != GRIS:
+        pygame.draw.circle(sup, aclarar(color, 0.65), (int(cx - r * 1.1), int(cy - r * 0.7)), max(2, int(r * 0.35)))
+
+
+def estrella(sup, centro, radio, color, borde=None, brillo=True):
     cx, cy = centro
     pts = []
     for i in range(10):
         ang = -math.pi / 2 + i * math.pi / 5
-        rr = radio if i % 2 == 0 else radio * 0.45
+        rr = radio if i % 2 == 0 else radio * 0.5
         pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
+    if borde:
+        pygame.draw.polygon(sup, borde, pts, max(2, int(radio / 6)))
     pygame.draw.polygon(sup, color, pts)
     if borde:
-        pygame.draw.polygon(sup, borde, pts, 2)
+        pygame.draw.polygon(sup, borde, pts, max(2, int(radio / 8)))
+    if brillo and radio > 8 and color not in (GRIS,):
+        pygame.draw.circle(sup, aclarar(color, 0.7), (int(cx - radio * 0.18), int(cy - radio * 0.25)), max(2, int(radio * 0.16)))
+
+
+def moneda(sup, centro, radio, giro=0.0):
+    """Moneda dorada (con giro, para cuando vuela)."""
+    cx, cy = centro
+    ancho = max(3, int(abs(math.cos(giro)) * radio * 2))
+    r = pygame.Rect(0, 0, ancho, int(radio * 2))
+    r.center = (int(cx), int(cy))
+    pygame.draw.ellipse(sup, SOL_OSC, r.inflate(4, 4))
+    pygame.draw.ellipse(sup, SOL, r)
+    if ancho > radio:
+        pygame.draw.ellipse(sup, aclarar(SOL, 0.4), r.inflate(-radio * 0.7, -radio * 0.7), 2)
+        pygame.draw.circle(sup, (255, 250, 220), (int(cx - radio * 0.35), int(cy - radio * 0.4)), max(1, int(radio * 0.2)))
 
 
 def candado(sup, centro, tam, color=SUAVE):
     cx, cy = centro
     cuerpo = pygame.Rect(0, 0, tam, int(tam * 0.75))
     cuerpo.center = (cx, cy + tam * 0.18)
-    pygame.draw.rect(sup, color, cuerpo, border_radius=4)
     arco = pygame.Rect(0, 0, int(tam * 0.64), int(tam * 0.8))
     arco.center = (cx, cuerpo.top)
-    pygame.draw.arc(sup, color, arco, 0, math.pi, max(2, tam // 7))
+    pygame.draw.arc(sup, oscurecer(color, 0.8), arco, 0, math.pi, max(3, tam // 6))
+    pygame.draw.rect(sup, color, cuerpo, border_radius=5)
+    pygame.draw.rect(sup, oscurecer(color, 0.75), cuerpo, 2, border_radius=5)
+    pygame.draw.circle(sup, oscurecer(color, 0.6), (int(cx), int(cuerpo.centery - 1)), max(2, tam // 9))
 
 
 def tilde(sup, centro, tam, color, grosor=4):
@@ -275,10 +393,77 @@ def cruz(sup, centro, tam, color, grosor=4):
     pygame.draw.line(sup, color, (cx - d, cy + d), (cx + d, cy - d), grosor)
 
 
+def triangulo(sup, centro, tam, color, direccion=1):
+    """Flechita hacia la derecha (1) o la izquierda (-1)."""
+    cx, cy = centro
+    pygame.draw.polygon(sup, color, [(cx - tam * 0.4 * direccion, cy - tam * 0.5),
+                                     (cx + tam * 0.5 * direccion, cy), (cx - tam * 0.4 * direccion, cy + tam * 0.5)])
+
+
+def parlante(sup, centro, tam, color, activo=True):
+    cx, cy = centro
+    pygame.draw.rect(sup, color, (cx - tam * 0.5, cy - tam * 0.18, tam * 0.3, tam * 0.36), border_radius=2)
+    pygame.draw.polygon(sup, color, [(cx - tam * 0.3, cy - tam * 0.18), (cx, cy - tam * 0.45),
+                                     (cx, cy + tam * 0.45), (cx - tam * 0.3, cy + tam * 0.18)])
+    if activo:
+        for k, rr in enumerate((0.25, 0.42)):
+            r = pygame.Rect(0, 0, tam * rr * 2, tam * rr * 2)
+            r.center = (cx + tam * 0.02, cy)
+            pygame.draw.arc(sup, color, r, -0.9, 0.9, 3)
+    else:
+        cruz(sup, (cx + tam * 0.3, cy), tam * 0.45, color, 3)
+
+
+def globo(sup, rect, punta, color=TARJETA, borde=BORDE, grosor=3, radio=20):
+    """Globito de diálogo con la colita apuntando a 'punta' (la boca del gato)."""
+    rect = pygame.Rect(rect)
+    px, py = punta
+    bx = max(rect.left + radio + 10, min(rect.right - radio - 40, px + 30))
+    base_y = rect.bottom - 2 if py > rect.bottom else rect.top + 2
+    if px < rect.left:
+        # la colita sale por la izquierda
+        cy = max(rect.top + radio + 10, min(rect.bottom - radio - 10, py))
+        tri = [(rect.left + 2, cy - 14), (rect.left + 2, cy + 14), (px, py)]
+    else:
+        tri = [(bx - 16, base_y), (bx + 16, base_y), (px, py)]
+    pygame.draw.rect(sup, oscurecer(color, 0.85), rect.move(0, 5), border_radius=radio)
+    pygame.draw.polygon(sup, borde, tri, grosor * 2)
+    pygame.draw.rect(sup, color, rect, border_radius=radio)
+    pygame.draw.polygon(sup, color, tri)
+    pygame.draw.rect(sup, borde, rect, grosor, border_radius=radio)
+    # tapar el borde donde se une la colita
+    if px < rect.left:
+        pygame.draw.line(sup, color, (rect.left + 1, tri[0][1] + 3), (rect.left + 1, tri[1][1] - 3), grosor + 2)
+    else:
+        pygame.draw.line(sup, color, (tri[0][0] + 3, base_y - 1), (tri[1][0] - 3, base_y - 1), grosor + 2)
+
+
+def tabla_madera(sup, rect, radio=10, color=MADERA):
+    """Cartel de madera con vetas."""
+    rect = pygame.Rect(rect)
+    pygame.draw.rect(sup, MADERA_OSC, rect.move(0, 5), border_radius=radio)
+    pygame.draw.rect(sup, color, rect, border_radius=radio)
+    vetas = oscurecer(color, 0.88)
+    n = max(1, rect.height // 18)
+    for k in range(1, n + 1):
+        y = rect.top + k * rect.height / (n + 1)
+        pygame.draw.line(sup, vetas, (rect.left + 14, y), (rect.right - 14, y), 2)
+    for x in (rect.left + 12, rect.right - 12):
+        pygame.draw.circle(sup, MADERA_OSC, (x, rect.top + 12), 3)
+    pygame.draw.rect(sup, MADERA_OSC, rect, 3, border_radius=radio)
+
+
 # ------------------------------------------------------------ botón
+def _ahora():
+    return pygame.time.get_ticks() / 1000
+
+
 class Boton:
+    """Botón 'de videojuego': tiene relieve, se levanta con el mouse y se hunde al apretarlo."""
+
     def __init__(self, rect, contenido, accion, color=LAVANDA, color_texto=TINTA, tam=22,
-                 tecla=None, habilitado=True, negrita=True, radio=16, etiqueta_tecla=None):
+                 tecla=None, habilitado=True, negrita=True, radio=16, etiqueta_tecla=None,
+                 sonido="click", relieve=6):
         self.rect = pygame.Rect(rect)
         self.accion = accion
         self.color = color
@@ -287,59 +472,95 @@ class Boton:
         self.habilitado = habilitado
         self.radio = radio
         self.marcado = None          # None | "bien" | "mal"
+        self.t_marcado = 0.0
         self.etiqueta_tecla = etiqueta_tecla
+        self.sonido = sonido
+        self.relieve = relieve
+        self.t_apretado = -10.0
+        self.encima_antes = False
         if isinstance(contenido, pygame.Surface):
             self.sup = contenido
         else:
             if negrita and "$" not in contenido and "**" not in contenido:
                 contenido = f"**{contenido}**"
-            self.sup = rico(contenido, tam, color_texto, ancho=self.rect.width - 28)
+            self.sup = rico(contenido, tam, color_texto, ancho=self.rect.width - 28, color_negrita=color_texto)
         self.sup = escalar_a(self.sup, self.rect.width - 24)
         if self.sup.get_height() > self.rect.height - 10:
             k = (self.rect.height - 10) / self.sup.get_height()
             self.sup = pygame.transform.smoothscale(
                 self.sup, (max(1, int(self.sup.get_width() * k)), max(1, int(self.sup.get_height() * k))))
 
+    def marcar(self, estado):
+        self.marcado = estado
+        self.t_marcado = _ahora()
+
+    def _activar(self):
+        self.t_apretado = _ahora()
+        if self.sonido:
+            from .sonido import sonidos
+            sonidos.tocar(self.sonido)
+        self.accion()
+
     def evento(self, e):
         if not self.habilitado:
             return False
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect.collidepoint(e.pos):
-            self.accion()
+            self._activar()
             return True
         if e.type == pygame.KEYDOWN and self.tecla is not None:
             teclas = self.tecla if isinstance(self.tecla, (list, tuple)) else [self.tecla]
             if e.key in teclas:
-                self.accion()
+                self._activar()
                 return True
         return False
 
-    def dibujar(self, sup):
-        encima = self.habilitado and self.rect.collidepoint(pygame.mouse.get_pos())
+    def dibujar(self, sup, dx=0, dy=0):
+        ahora = _ahora()
+        rect = self.rect.move(dx, dy)
+        encima = self.habilitado and rect.collidepoint(pygame.mouse.get_pos())
+        apretado = ahora - self.t_apretado < 0.12
         color = self.color
+        borde = oscurecer(self.color, 0.62)
         if self.marcado == "bien":
-            color = MENTA
+            color, borde = MENTA, MENTA_OSC
         elif self.marcado == "mal":
-            color = ROSA
+            color, borde = ROSA, ROSA_OSC
         elif not self.habilitado:
-            color = (236, 232, 238)
-        r = self.rect.move(0, -2) if encima else self.rect
-        if encima:
-            color = aclarar(color, 0.3)
-        sombra = r.move(0, 4 if not encima else 6)
-        pygame.draw.rect(sup, oscurecer(self.color if self.habilitado else GRIS, 0.8), sombra, border_radius=self.radio)
-        pygame.draw.rect(sup, color, r, border_radius=self.radio)
-        if self.marcado == "bien":
-            pygame.draw.rect(sup, MENTA_OSC, r, 3, border_radius=self.radio)
-        elif self.marcado == "mal":
-            pygame.draw.rect(sup, ROSA_OSC, r, 3, border_radius=self.radio)
+            color, borde = (232, 224, 210), (200, 188, 170)
+        if encima and not apretado:
+            color = aclarar(color, 0.25)
+        sacudir = 0
+        if self.marcado == "mal" and ahora - self.t_marcado < 0.4:
+            k = 1 - (ahora - self.t_marcado) / 0.4
+            sacudir = int(math.sin((ahora - self.t_marcado) * 60) * 8 * k)
+        salto = 0
+        if self.marcado == "bien" and ahora - self.t_marcado < 0.35:
+            salto = -int(math.sin((ahora - self.t_marcado) / 0.35 * math.pi) * 8)
+        relieve = self.relieve
+        hundir = relieve - 1 if apretado else (-2 if encima else 0)
+        cara = rect.move(sacudir, hundir + salto)
+        base = rect.move(sacudir, relieve + salto)
+        pygame.draw.rect(sup, borde, base.inflate(4, 4), border_radius=self.radio + 2)
+        pygame.draw.rect(sup, oscurecer(color, 0.8), base, border_radius=self.radio)
+        pygame.draw.rect(sup, borde, cara.inflate(4, 4), border_radius=self.radio + 2)
+        pygame.draw.rect(sup, color, cara, border_radius=self.radio)
+        # brillo de arriba
+        brillo = pygame.Rect(cara.left + 8, cara.top + 4, cara.width - 16, max(4, cara.height // 5))
+        pygame.draw.rect(sup, aclarar(color, 0.45), brillo, border_radius=self.radio // 2 + 2)
         contenido = self.sup
         if not self.habilitado and self.marcado is None:
             contenido = contenido.copy()
             contenido.set_alpha(110)
-        sup.blit(contenido, contenido.get_rect(center=r.center))
+        sup.blit(contenido, contenido.get_rect(center=(cara.centerx, cara.centery + 1)))
+        if self.marcado == "bien":
+            pygame.draw.circle(sup, MENTA_OSC, (cara.right - 20, cara.top + 18), 12)
+            tilde(sup, (cara.right - 20, cara.top + 18), 13, TARJETA, 3)
+        elif self.marcado == "mal":
+            pygame.draw.circle(sup, ROSA_OSC, (cara.right - 20, cara.top + 18), 12)
+            cruz(sup, (cara.right - 20, cara.top + 18), 15, TARJETA, 3)
         if self.etiqueta_tecla:
-            et = texto(self.etiqueta_tecla, 14, SUAVE, negrita=True)
-            sup.blit(et, (r.left + 10, r.top + 6))
+            et = texto(self.etiqueta_tecla, 14, oscurecer(color, 0.5), negrita=True)
+            sup.blit(et, (cara.left + 12, cara.top + 7))
 
 
 # ------------------------------------------------------------ cuadro de texto
@@ -375,6 +596,8 @@ class CampoTexto:
         if e.type == pygame.TEXTINPUT:
             if len(self.texto) < 120:
                 self.insertar(e.text)
+                from .sonido import sonidos
+                sonidos.tocar("tecla", variar=True)
             return True
         if e.type == pygame.KEYDOWN:
             if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
@@ -422,8 +645,14 @@ class CampoTexto:
         self.t += dt
 
     def dibujar(self, sup):
-        caja(sup, self.rect, TARJETA, radio=14, sombra=False,
-             borde=LAVANDA_OSC if self.habilitado else GRIS, grosor=3)
+        r = self.rect
+        pygame.draw.rect(sup, (255, 255, 255), r, border_radius=14)
+        pygame.draw.rect(sup, (236, 230, 218), (r.left + 4, r.top + 3, r.width - 8, 6), border_radius=3)
+        borde = LAVANDA_OSC if self.habilitado else GRIS
+        if self.habilitado:
+            brillo = 0.5 + 0.5 * math.sin(self.t * 3)
+            pygame.draw.rect(sup, aclarar(LAVANDA, 0.3 + 0.3 * brillo), r.inflate(10, 10), 4, border_radius=18)
+        pygame.draw.rect(sup, borde, r, 3, border_radius=14)
         f = fuente(26, mono=True)
         interior = self.rect.inflate(-32, 0)
         ancho_cursor = f.size(self.texto[:self.cursor])[0]
@@ -441,7 +670,7 @@ class CampoTexto:
             sup.blit(s, (interior.left, self.rect.centery - s.get_height() // 2))
         if self.habilitado and (self.t % 1.0) < 0.6:
             cx = interior.left + ancho_cursor - self.desplazamiento
-            pygame.draw.line(sup, LAVANDA_OSC, (cx, self.rect.centery - 15), (cx, self.rect.centery + 15), 2)
+            pygame.draw.line(sup, LAVANDA_OSC, (cx, self.rect.centery - 15), (cx, self.rect.centery + 15), 3)
         sup.set_clip(clip)
 
 
