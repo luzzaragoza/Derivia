@@ -120,7 +120,14 @@ juego/progreso.py     guardado
 tests/                pruebas: genera cientos de ejercicios y verifica que todo esté bien
 ```
 
-Para correr las pruebas: `python tests/test_ejercicios.py`
+Pruebas:
+
+```
+python tests/test_ejercicios.py   # cientos de ejercicios de cada nivel: respuestas y errores típicos bien armados
+python tests/test_detective.py    # el detective: una sola razón correcta y todas con sentido
+python tests/test_e2e.py          # el juego entero: arranque, tamaños de ventana, todos los botones,
+                                  # los 49 niveles y borrar progreso (--rapido para una versión corta)
+```
 
 ## Gráficos
 

@@ -349,8 +349,9 @@ class Mapa(Escena):
                         self.boton_opciones((ANCHO - 76, 18, 56, 50))]
         txt = "Volver a bloquear" if p.todo_desbloqueado else "Desbloquear todo"
         self.botones.append(Boton((ANCHO - 290, 18, 200, 50), txt, self.alternar_todo, ARENA, tam=17))
+        abierto = any(p.desbloqueado(m.id, i) for i in range(len(m.niveles)))
         self.botones.append(Boton((20, 660, 220, 46), "Repasar este mundo", self.repasar_mundo, (186, 150, 236),
-                                  tam=17, relieve=4))
+                                  tam=17, relieve=4, habilitado=abierto))
         for d, x in ((-1, ANCHO // 2 - 360), (1, ANCHO // 2 + 310)):
             destino = self.sel + d
             ok = 0 <= destino < len(MUNDOS) and p.mundo_desbloqueado(MUNDOS[destino].id)
@@ -378,6 +379,8 @@ class Mapa(Escena):
         p = self.app.progreso
         m = self.mundo
         abiertos = [i for i in range(len(m.niveles)) if p.desbloqueado(m.id, i)]
+        if not abiertos:      # mundo todavía cerrado: no hay nada para repasar
+            return
         claves = []
         for k in range(6):
             i = abiertos[k % len(abiertos)] if k < len(abiertos) else random.choice(abiertos)
