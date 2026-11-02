@@ -759,6 +759,8 @@ class Juego(Escena):
         self.sacudir = 0
         self.t = 0.0
         self.t_entrada = 0.0
+        self.t_cartel = 0.0          # cartel con el nombre del nivel al empezar
+        self.cartel = None
         self.t_moneda = 1.0
         self.t_corazon = 10.0
         self.ultimo_tic = None
@@ -1316,6 +1318,10 @@ class Juego(Escena):
         return (min(ANCHO - 230, borde_corazones - 16 - ancho), 32)
 
     def evento(self, e):
+        ini, fin = self.CARTEL
+        if ini <= self.t_cartel < fin - 0.3 and e.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
+            self.t_cartel = fin - 0.3          # un clic (o una tecla) lo saca más rápido
+            return True
         if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
             self.atras()
             return True
@@ -1336,6 +1342,7 @@ class Juego(Escena):
     def actualizar(self, dt):
         self.t += dt
         self.t_entrada += dt
+        self.t_cartel += dt
         self.t_moneda += dt
         self.t_corazon += dt
         self.campo.actualizar(dt)
@@ -1493,6 +1500,52 @@ class Juego(Escena):
         for b in self.botones[:3]:
             b.dibujar(sup)
         self.fx.dibujar(sup)
+        self._dibujar_cartel(sup)
+
+    # ---------------------------------------------- cartel con el nombre del nivel
+    CARTEL = (0.30, 1.75)        # aparece cuando ya pasó la ola y se va solo (o con un clic)
+
+    def _armar_cartel(self):
+        if self.desafio:
+            arriba, nombre, desc = self.mundo.nombre.upper(), "Desafío del jefe", "Si ganás, te salteás el mundo entero."
+        elif self.practica:
+            arriba, nombre, desc = "REPASO", self.titulo.replace("Repaso · ", ""), "Sin estrellas, pero con monedas."
+        else:
+            n = len(self.mundo.niveles)
+            num = "JEFE" if self.jefe else f"NIVEL {self.nivel_idx + 1} DE {n - 1}"
+            arriba, nombre, desc = f"{self.mundo.nombre.upper()} · {num}", self.nivel.nombre, self.nivel.descripcion
+        tit = ui.texto_borde(nombre, 46, CREMA, MADERA_OSC, 3)
+        sub = ui.texto_borde(arriba, 20, SOL if not self.jefe else (255, 190, 170), MADERA_OSC, 2)
+        des = ui.rico(desc, 21, TINTA, ancho=640, centrado=True, color_negrita=ui.CORAL_OSC) if desc else None
+        self.cartel = (tit, sub, des)
+
+    def _dibujar_cartel(self, sup):
+        ini, fin = self.CARTEL
+        t = self.t_cartel
+        if t < ini or t > fin:
+            return
+        if self.cartel is None:
+            self._armar_cartel()
+        tit, sub, des = self.cartel
+        k_in = min(1.0, (t - ini) / 0.28)
+        k_out = max(0.0, 1 - (fin - t) / 0.3)
+        alfa = int(255 * min(suave(k_in), 1 - suave(k_out)))
+        caida = (1 - rebote(k_in)) * -60 + suave(k_out) * 40
+        capa = Lienzo(ANCHO, ALTO)
+        capa.fill((40, 26, 20, 90))
+        w = max(tit.get_width(), sub.get_width()) + 120
+        plancha = pygame.Rect(0, 0, max(520, w), 132)
+        plancha.center = (ANCHO // 2, int(ALTO // 2 - 50 + caida))
+        ui.tabla_madera(capa, plancha, radio=18)
+        capa.blit(sub, sub.get_rect(center=(plancha.centerx, plancha.top + 34)))
+        capa.blit(tit, tit.get_rect(center=(plancha.centerx, plancha.top + 82)))
+        if des is not None:
+            caja = pygame.Rect(0, 0, des.get_width() + 48, des.get_height() + 26)
+            caja.midtop = (plancha.centerx, plancha.bottom + 14)
+            ui.tarjeta(capa, caja, ui.PERGAMINO, 18, ui.ARENA_OSC, 5)
+            capa.blit(des, des.get_rect(center=caja.center))
+        capa.set_alpha(alfa)
+        sup.blit(capa, (0, 0))
 
 
 # =============================================================== FIN DE NIVEL
