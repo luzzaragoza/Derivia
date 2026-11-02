@@ -191,6 +191,15 @@ def _musica_estudio():
                   campanitas=[(0, "E6"), (2, "C6"), (4, "A5"), (6, "G5")])
 
 
+def _musica_pensar():
+    """Para las preguntas de lógica: más liviana y 'curiosa' (en menor, con pizzicatos)."""
+    acordes = [("A2", ["A4", "C5", "E5", "A5"]), ("F2", ["F4", "A4", "C5", "F5"]),
+               ("C3", ["E4", "G4", "C5", "E5"]), ("G2", ["D4", "G4", "B4", "D5"])]
+    mel = [(None, 4), ("E6", .5), (None, 1.5), ("C6", .5), (None, 1.5), (None, 4), ("D6", .5), (None, .5), ("B5", .5),
+           (None, 2.5), (None, 4), ("A5", .5), (None, 1.5), ("C6", .5), (None, 1.5), (None, 4), ("B5", 1), (None, 3)]
+    return _pista(108, 8, acordes, mel, arpegio_vol=0.055, bajo_vol=0.22, mel_vol=0.13, shaker=0.018)
+
+
 def _jingle_inicio():
     """Fanfarria corta de 'arranca el nivel' (original)."""
     voz = _seq(*[_nota(n, 0.075, duty=0.25, vol=0.4, caida=0.3) for n in ("G4", "C5", "E5", "G5", "E5", "G5")],
@@ -244,7 +253,7 @@ class Sonidos:
                 self._sonidos[nombre] = self._a_sonido(w, freq, canales)
             except Exception:
                 continue
-        for nombre, f in (("isla", _musica_isla), ("estudio", _musica_estudio)):
+        for nombre, f in (("isla", _musica_isla), ("estudio", _musica_estudio), ("pensar", _musica_pensar)):
             try:
                 self._musicas[nombre] = self._a_sonido(f(), freq, canales, 0.55)
             except Exception:
@@ -285,11 +294,11 @@ class Sonidos:
         if not self.ok:
             return
         viejo = pygame.mixer.Channel(self._canal_musica)
-        viejo.fadeout(700)
+        viejo.fadeout(1200)
         if nombre and self.musica_activa and nombre in self._musicas:
             self._canal_musica = 1 - self._canal_musica
             nuevo = pygame.mixer.Channel(self._canal_musica)
-            nuevo.play(self._musicas[nombre], loops=-1, fade_ms=900)
+            nuevo.play(self._musicas[nombre], loops=-1, fade_ms=1200)
             self._volumen_canal_musica()
 
     def agachar(self, segundos=1.5):

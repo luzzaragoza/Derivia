@@ -615,6 +615,20 @@ class CampoTexto:
         self.cursor += len(s) - retroceso
         self._cambio()
 
+    def izquierda(self):
+        self.cursor = max(0, self.cursor - 1)
+        self.t = 0
+
+    def derecha(self):
+        self.cursor = min(len(self.texto), self.cursor + 1)
+        self.t = 0
+
+    def borrar_atras(self):
+        if self.cursor > 0:
+            self.texto = self.texto[:self.cursor - 1] + self.texto[self.cursor:]
+            self.cursor -= 1
+            self._cambio()
+
     def evento(self, e):
         if not self.habilitado:
             return False

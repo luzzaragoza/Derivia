@@ -42,6 +42,7 @@ class Paso:
     max_intentos: int = 2
     mostrar: str = ""                       # la respuesta como en el pizarrón (LaTeX)
     chequeo: str = "igual"                  # "igual" | "primitiva" | "numero"
+    repetitivo: bool = False                # pregunta de andamiaje: solo en el primer ejercicio del nivel
     var: object = None                      # variable respecto de la que se deriva/integra
     variables: tuple = (x,)                 # letras que se pueden tipear
     integrando: object = None               # para chequeo "primitiva"
@@ -474,8 +475,8 @@ def g_producto(ctx):
               f"Acá $u = {tex(u)}$ y $v = {tex(v)}$. Derivá cada una por separado."]
     f = u * v
     if ctx.modo == "opciones":
-        pasos = [paso_regla(ctx, "producto", "Son dos funciones de $x$ multiplicándose."),
-                 paso_derivada(ctx, "¿Cuánto da la derivada?", "f'(x) =", d, errs, pistas, expl, original=f, mostrar=pizarron)]
+        pasos = [paso_derivada(ctx, "¿Cuánto da la derivada?", "f'(x) =", d, errs, pistas, expl, original=f,
+                               mostrar=pizarron)]
     elif ctx.jefe:
         pasos = [paso_derivada(ctx, "¿Cuánto da la derivada?", "f'(x) =", d, errs, [], expl, original=f, mostrar=pizarron)]
     else:
@@ -503,8 +504,8 @@ def g_cociente(ctx):
               f"Acá $u = {tex(u)}$ (arriba) y $v = {tex(v)}$ (abajo)."]
     f = u / v
     if ctx.modo == "opciones":
-        pasos = [paso_regla(ctx, "cociente", "Es una función de $x$ dividida por otra."),
-                 paso_derivada(ctx, "¿Cuánto da la derivada?", "f'(x) =", d, errs, pistas, expl, original=f, mostrar=pizarron)]
+        pasos = [paso_derivada(ctx, "¿Cuánto da la derivada?", "f'(x) =", d, errs, pistas, expl, original=f,
+                               mostrar=pizarron)]
     elif ctx.jefe:
         pasos = [paso_derivada(ctx, "¿Cuánto da la derivada?", "f'(x) =", d, errs, [], expl, original=f, mostrar=pizarron)]
     else:
@@ -611,12 +612,12 @@ def _paso_adentro(ctx, f, u, af):
     if len(ops) < 4:
         g = af.F(x)
         if sp.srepr(g) not in usados:
-            ops.append(Opcion(tex=f"u = {tex(g)}", error="adentro_x"))
+            ops.append(Opcion(tex=f"u = {tex(g)}", error="adentro_afuera"))
     ops = ops[:4]
     rng.shuffle(ops)
     return Paso(pregunta="¿Cuál es la función **de adentro** ($u$)?", tipo="opcion", opciones=ops,
                 explicacion=f"La de adentro es $u = {tex(u)}$: está metida dentro de la otra función.",
-                resumen=f"$u = {tex(u)}$")
+                resumen=f"$u = {tex(u)}$", repetitivo=True)
 
 
 def _cadena(ctx, nombres_afuera, adentro):
@@ -691,7 +692,7 @@ def g_cadena_producto(ctx):
     rng.shuffle(ops)
     regla = Paso(pregunta="¿Qué reglas vas a necesitar?", tipo="opcion", opciones=ops,
                  explicacion=f"Afuera hay un producto. Y ${_tex_compuesta(af, u)}$ tiene algo adentro: ese factor se deriva con cadena.",
-                 resumen="Reglas: producto + cadena")
+                 resumen="Reglas: producto + cadena", repetitivo=True)
     pasos = [regla,
              paso_derivada(ctx, f"Llamemos $u = {tex(p)}$. ¿Cuánto es $u'$?", "u' =", dp, mp,
                            [f"Derivá solo ${tex(p)}$."], "", original=p),

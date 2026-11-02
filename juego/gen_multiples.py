@@ -227,6 +227,7 @@ def g_polares(ctx):
                      correcta, malas, "La función se escribe en $r$ y $\\theta$, y $dx\\,dy = r\\,dr\\,d\\theta$ "
                      "(la $r$ es el jacobiano).", f"${ftex}\\,dx\\,dy = {correcta}$",
                      pistas=["$x^2 + y^2 = r^2$.", "No te olvides del jacobiano: $dx\\,dy = r\\,dr\\,d\\theta$."])
+    p1.repetitivo = True
     r1, r2, t1, t2 = reg["r1"], reg["r2"], reg["t1"], reg["t2"]
 
     def lims(a1, a2, b1, b2):
@@ -366,6 +367,7 @@ def g_cilindricas(ctx):
                       ("\\rho^{2}\\,\\mathrm{sen}\\,\\varphi\\;dz\\,dr\\,d\\theta", "jacobiano_cilindricas")],
                      "Cilíndricas son polares + $z$: el jacobiano sigue siendo $r$.", "$dV = r\\,dz\\,dr\\,d\\theta$",
                      pistas=["Es como polares, con la $z$ que queda igual."])
+    p1.repetitivo = True
     zl = f"{tex(z1)} \\leq z \\leq {tex(z2)}"
     malas = [(f"{tex(z2)} \\leq z \\leq {tex(z1)}", "limites_al_reves"),
              ("r \\leq z \\leq " + tex(z2), "limites_mal"), ("r^{2} \\leq z \\leq " + tex(z2), "limites_mal"),
@@ -419,6 +421,7 @@ def g_esfericas(ctx):
                      "$dV = \\rho^2\\,\\mathrm{sen}\\,\\varphi\\;d\\rho\\,d\\varphi\\,d\\theta$",
                      pistas=["Es $\\rho$ al cuadrado por el seno del ángulo que se mide desde el eje $z$."])
 
+    p1.repetitivo = True
     def lims(rmax, pmax, tmax):
         return f"0 \\leq \\rho \\leq {tex(rmax)},\\ 0 \\leq \\varphi \\leq {tex(pmax)},\\ 0 \\leq \\theta \\leq {tex(tmax)}"
     otro_p = PI if medio else PI / 2

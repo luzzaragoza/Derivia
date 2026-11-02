@@ -50,6 +50,8 @@ class Progreso:
         self.ropa_comprada = []          # ids de la tienda
         self.ropa_puesta = {}            # lugar -> id
         self.nombre_gato = ""
+        self.repaso_mundos = []          # mundos donde ya apareció un repaso del cuaderno
+        self.teclado_numerico = False
         self.cargar()
 
     # ------------------------------------------------ disco
@@ -74,6 +76,8 @@ class Progreso:
         self.ropa_comprada = datos.get("ropa_comprada", [])
         self.ropa_puesta = datos.get("ropa_puesta", {})
         self.nombre_gato = datos.get("nombre_gato", "")
+        self.repaso_mundos = datos.get("repaso_mundos", [])
+        self.teclado_numerico = datos.get("teclado_numerico", False)
 
     def guardar(self):
         datos = {"niveles": self.niveles, "cuaderno": self.cuaderno,
@@ -81,7 +85,8 @@ class Progreso:
                  "vol_efectos": self.vol_efectos, "vol_musica": self.vol_musica,
                  "pantalla_completa": self.pantalla_completa, "monedas": self.monedas,
                  "ropa_comprada": self.ropa_comprada, "ropa_puesta": self.ropa_puesta,
-                 "nombre_gato": self.nombre_gato}
+                 "nombre_gato": self.nombre_gato, "repaso_mundos": self.repaso_mundos,
+                 "teclado_numerico": self.teclado_numerico}
         tmp = self.archivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
         tmp.replace(self.archivo)
@@ -167,3 +172,15 @@ class Progreso:
         else:
             self.ropa_puesta[lugar] = item_id
         self.guardar()
+
+    def comprar_conjunto(self, piezas, precio):
+        """Compra todas las piezas que falten de un conjunto (con descuento)."""
+        faltan = [pid for pid in piezas if pid not in self.ropa_comprada]
+        if not faltan:
+            return True
+        if self.monedas < precio:
+            return False
+        self.monedas -= precio
+        self.ropa_comprada.extend(faltan)
+        self.guardar()
+        return True

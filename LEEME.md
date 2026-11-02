@@ -30,12 +30,18 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 - **Integrales dobles**: te muestra el dibujo de la región.
 - **Cada mundo es una isla distinta**: de la Isla Serena a la Isla Calavera, cada vez un poco más misteriosas.
 - **Tu michi tiene nombre**: se lo ponés la primera vez (y lo cambiás tocando su cartelito en el menú).
-- **Teclado de fórmulas** con potencias, raíces n-ésimas, + y −; los paréntesis se colorean por pareja.
+- **Teclado de fórmulas** como el de la calculadora (x², xⁿ, √, ⁿ√, +, −, AC) y un teclado numérico que se
+  despliega con **123** (para usarlo con pantalla táctil). Los paréntesis se colorean por pareja. El punto
+  también multiplica (`2.x`); los decimales van con coma (`0,5`).
+- **Detective de errores**: a veces te muestran la resolución de otra persona y tenés que encontrar el error.
+- **PENSÁ / CALCULÁ**: cada consigna dice si es de razonar o de hacer la cuenta (y cambia la música).
+- **Al terminar un nivel** podés revisar tus errores; en cada isla hay un botón para **repasar todo el mundo**.
 - Abajo del cuadro de texto aparece **"Leo: …"** con cómo se entendió lo que escribiste.
 - **Un gato naranja** te acompaña: festeja los aciertos, se pone triste con los errores y te da las pistas.
 - **Mapa de islas**: cada mundo es una isla con un camino de niveles.
 - **Tienda del michi**: las monedas que ganás en los niveles se guardan y sirven para comprarle ropa al gato
-  (sombreros, pelucas, anteojos, collares, capa, alitas...). Lo que le ponés lo lleva en todo el juego.
+  (sombreros, pelucas, anteojos, collares, vestidos, capa, alitas, varita...) y **conjuntos** completos
+  (astronauta, bruja, princesa, hada, chef, pirata...). Lo que le ponés lo lleva en todo el juego.
 - **Música de fondo** tranquila y **sonidos 8-bit**. En **Opciones** (el engranaje) se prenden, apagan y ajustan
   por separado; la tecla **M** silencia todo.
 - Confeti, monedas que vuelan, racha con fueguito, transiciones con olas y una fanfarria con el gato saltando

@@ -129,7 +129,8 @@ def normalizar(texto):
     s = texto.strip().lower()
     for viejo, nuevo in _CARACTERES.items():
         s = s.replace(viejo, nuevo)
-    s = s.replace(",", ".").replace("**", "^")
+    # el punto multiplica (como en la carpeta: 2.x); los decimales van con coma (0,5)
+    s = s.replace("**", "^").replace(".", "*").replace(",", ".")
     # nombres en castellano
     s = s.replace("raiz", "sqrt").replace("sen", "sin").replace("tg", "tan")
     s = s.replace("ln", "log")
@@ -373,6 +374,8 @@ ERRORES = {
                            "Con funciones metidas una dentro de otra, multiplicás la derivada de **cada capa**, de afuera hacia adentro."),
     "adentro_x": ("Si fuera x no habría cadena",
                   "La de adentro es lo que está «metido» en la otra función: lo que está entre paréntesis, en el exponente o debajo de la raíz."),
+    "adentro_afuera": ("Esa es la función de afuera",
+                       "$u$ es lo que está **adentro**: lo que va entre paréntesis, en el exponente o debajo de la raíz, no la función que lo envuelve."),
     "adentro_todo": ("Esa es la función entera",
                      "Buscá qué parte está metida **dentro** de otra función: esa es $u$, la de adentro."),
     "adentro_parte": ("Es todo lo que está adentro, no solo una parte",

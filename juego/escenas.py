@@ -50,6 +50,48 @@ def dibujar_monedero(sup, monedas, arriba_derecha):
     return r
 
 
+_VELO = {}
+
+
+def _velo_logica():
+    """Un tinte lila suave para las preguntas de pensar (así se distinguen de las de calcular)."""
+    if "v" not in _VELO:
+        v = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        v.fill((186, 150, 236, 34))
+        _VELO["v"] = v
+    return _VELO["v"]
+
+
+def cartelito_consigna(logica):
+    """PENSÁ (lamparita) o CALCULÁ (lápiz), para que se note qué tipo de consigna es."""
+    clave = ("cartel", logica)
+    if clave in _VELO:
+        return _VELO[clave]
+    texto = "PENSÁ" if logica else "CALCULÁ"
+    color = (150, 110, 220) if logica else ui.CORAL
+    t = ui.texto(texto, 15, CREMA, negrita=True)
+    s = pygame.Surface((t.get_width() + 44, 30), pygame.SRCALPHA)
+    pygame.draw.rect(s, BORDE, s.get_rect(), border_radius=15)
+    pygame.draw.rect(s, color, s.get_rect().inflate(-4, -4), border_radius=13)
+    if logica:   # lamparita
+        pygame.draw.circle(s, (255, 236, 140), (17, 13), 7)
+        pygame.draw.rect(s, (230, 230, 230), (14, 19, 7, 5), border_radius=2)
+    else:        # lápiz
+        pygame.draw.line(s, (255, 214, 102), (10, 22), (22, 9), 5)
+        pygame.draw.polygon(s, (255, 236, 200), [(8, 25), (10, 19), (14, 23)])
+    s.blit(t, (32, 15 - t.get_height() // 2))
+    _VELO[clave] = s
+    return s
+
+
+def flecha_reiniciar(sup, centro, tam, color):
+    cx, cy = centro
+    r = pygame.Rect(0, 0, tam, tam)
+    r.center = centro
+    pygame.draw.arc(sup, color, r, 0.6, math.tau - 0.2, 4)
+    pygame.draw.polygon(sup, color, [(cx + tam * 0.5, cy - tam * 0.42), (cx + tam * 0.52, cy), (cx + tam * 0.12, cy - tam * 0.14)])
+
+
 def nombre_corto(m):
     return m.nombre.replace("Mundo ", "")
 
@@ -297,6 +339,8 @@ class Mapa(Escena):
                         self.boton_opciones((ANCHO - 76, 18, 56, 50))]
         txt = "Volver a bloquear" if p.todo_desbloqueado else "Desbloquear todo"
         self.botones.append(Boton((ANCHO - 290, 18, 200, 50), txt, self.alternar_todo, ARENA, tam=17))
+        self.botones.append(Boton((20, 660, 220, 46), "Repasar este mundo", self.repasar_mundo, (186, 150, 236),
+                                  tam=17, relieve=4))
         for d, x in ((-1, ANCHO // 2 - 360), (1, ANCHO // 2 + 310)):
             destino = self.sel + d
             ok = 0 <= destino < len(MUNDOS) and p.mundo_desbloqueado(MUNDOS[destino].id)
@@ -318,6 +362,22 @@ class Mapa(Escena):
             self.botones.append(b)
         self.nodos = self._nodos(m)
         self.gato_nodo = self._actual(m)
+
+    def repasar_mundo(self):
+        """Mezcla de ejercicios de los niveles abiertos de este mundo (sin estrellas, con monedas)."""
+        p = self.app.progreso
+        m = self.mundo
+        abiertos = [i for i in range(len(m.niveles)) if p.desbloqueado(m.id, i)]
+        claves = []
+        for k in range(6):
+            i = abiertos[k % len(abiertos)] if k < len(abiertos) else random.choice(abiertos)
+            gen = random.choice(m.niveles[i].generadores).__name__
+            claves.append({"mundo": m.id, "nivel": i, "gen": gen, "semilla": random.randrange(10**9)})
+        errores = [c["clave"] for c in p.cuaderno if c["clave"]["mundo"] == m.id]
+        if errores:
+            claves[random.randrange(len(claves))] = random.choice(errores)
+        random.shuffle(claves)
+        self.app.cambiar(Juego(self.app, m.id, None, practica=claves, titulo_practica=f"Repaso · {m.tema}"), "ola")
 
     def alternar_todo(self):
         p = self.app.progreso
@@ -594,11 +654,12 @@ class Mapa(Escena):
 
 # =============================================================== JUEGO
 
-# (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor)
-TECLADO = [("x^{n}", "^()", 1), (r"(\;\;)", "()", 1), ("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0),
-           ("/", "/", 0), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1),
+# (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor) — como en la calculadora
+TECLADO = [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1),
+           (r"(\;\;)", "()", 1), ("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0), ("/", "/", 0),
            (r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{x}", "e^()", 1), (r"\ln", "ln()", 1)]
 FUNCIONES_TECLADO = (r"\mathrm{sen}", r"\cos", "e^{x}", r"\ln")
+NUMEROS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ","]
 
 PIE_GATO = (96, ALTO - 8)
 BOCA_GATO = (150, ALTO - 120)
@@ -608,17 +669,23 @@ X_GLOBO = 196
 class Juego(Escena):
     musica = "estudio"
 
-    def __init__(self, app, mundo_id, nivel_idx, practica=None):
+    def __init__(self, app, mundo_id, nivel_idx, practica=None, titulo_practica=None):
         super().__init__(app)
         self.practica = practica is not None
+        self.practica_claves = practica
         self.repasos = set()
+        self.errores_log = []
         if self.practica:
-            self.mundo = None
+            # repaso del cuaderno (mundo_id None) o repaso de un mundo entero
+            self.mundo = mundo_por_id(mundo_id) if mundo_id else None
             self.nivel = None
             self.ejercicios = [generar(c["mundo"], c["nivel"], c["gen"], c["semilla"]) for c in practica]
+            for k, ej in enumerate(self.ejercicios):
+                if k:   # en los repasos tampoco se repiten las preguntas de andamiaje
+                    ej.pasos = [p for p in ej.pasos if not p.repetitivo] or ej.pasos
             self.vidas_max = 5
-            self.titulo = "Repaso del cuaderno"
-            self.color = ui.ROSA
+            self.titulo = titulo_practica or "Repaso del cuaderno"
+            self.color = self.mundo.color if self.mundo else ui.ROSA
         else:
             self.mundo = mundo_por_id(mundo_id)
             self.nivel = self.mundo.niveles[nivel_idx]
@@ -651,6 +718,7 @@ class Juego(Escena):
         self.t_moneda = 1.0
         self.t_corazon = 10.0
         self.ultimo_tic = None
+        self.monedas_vistas = float(app.progreso.monedas)
         self.campo = CampoTexto((0, 0, 560, 58), al_enter=self.comprobar, al_cambiar=self._previsualizar)
         pygame.key.start_text_input()
         self.empezar_ejercicio()
@@ -662,12 +730,14 @@ class Juego(Escena):
     # ---------------------------------------------- armado
     def _meter_repaso(self):
         """Mete un ejercicio del cuaderno de errores entre los del nivel."""
-        cuaderno = self.app.progreso.cuaderno
-        orden = [m.id for m in MUNDOS]
-        hasta = orden.index(self.mundo.id)
-        candidatos = [c for c in cuaderno if c["clave"]["mundo"] in orden and orden.index(c["clave"]["mundo"]) <= hasta]
-        if candidatos and random.random() < 0.7:
+        prog = self.app.progreso
+        if self.mundo.id in prog.repaso_mundos:
+            return      # un solo repaso por mundo (para practicar más está el cuaderno)
+        candidatos = [c for c in prog.cuaderno if c["clave"]["mundo"] == self.mundo.id]
+        if candidatos:
             c = random.choice(candidatos)["clave"]
+            prog.repaso_mundos.append(self.mundo.id)
+            prog.guardar()
             try:
                 ej = generar(c["mundo"], c["nivel"], c["gen"], c["semilla"])
             except Exception:
@@ -705,6 +775,9 @@ class Juego(Escena):
         self.preview = None
         self.ultimo_tic = None
         self.campo.poner("")
+        self.es_logica = self.paso.tipo == "opcion" and self.paso.esperado is None
+        self.musica = "pensar" if self.es_logica else "estudio"
+        sonidos.musica(self.musica)
         self.armar()
 
     def _respuesta_tex(self):
@@ -730,6 +803,20 @@ class Juego(Escena):
             teclas = [t for t in teclas if t[0] not in FUNCIONES_TECLADO]
         return teclas + extra
 
+    def alternar_numeros(self):
+        self.app.progreso.teclado_numerico = not self.app.progreso.teclado_numerico
+        self.app.progreso.guardar()
+        self.armar()
+
+    def reiniciar(self):
+        """Empezar el nivel de nuevo (por ejemplo, para hacerlo perfecto)."""
+        if self.practica:
+            nuevo = Juego(self.app, self.mundo.id if self.mundo else None, None, practica=self.practica_claves,
+                          titulo_practica=self.titulo)
+        else:
+            nuevo = Juego(self.app, self.mundo.id, self.nivel_idx)
+        self.app.cambiar(nuevo, "fundido")
+
     def _boton_pista(self, rect):
         """El botón de pista siempre está, así se entiende cuándo se puede usar."""
         n, vistas = len(self.paso.pistas), self.pistas_vistas
@@ -740,13 +827,16 @@ class Juego(Escena):
         elif vistas >= n:
             txt, ok = "No hay más pistas", False
         else:
-            txt, ok = ("Pista (−5)" if n == 1 else f"Pista {vistas + 1}/{n} (−5)"), True
+            txt, ok = ("Pista (−5 monedas)" if n == 1 else f"Pista {vistas + 1}/{n} (−5 monedas)"), True
         return Boton(rect, txt, self.pista, SOL, TINTA, tam=19, habilitado=ok, sonido="pista")
 
     def armar(self):
         """Calcula la ubicación de todo según el estado actual."""
+        icono = pygame.Surface((36, 36), pygame.SRCALPHA)
+        flecha_reiniciar(icono, (18, 18), 26, BORDE)
         self.botones = [Boton((14, 10, 108, 44), "Salir", self.atras, DURAZNO, tam=19, relieve=4),
-                        self.boton_opciones((130, 10, 48, 44))]
+                        self.boton_opciones((130, 10, 48, 44)),
+                        Boton((186, 10, 48, 44), icono, self.reiniciar, ARENA, relieve=4)]
         self.capas = []
         if self.ej.grafico:
             self.cx, self.ancho = 480, 860
@@ -780,9 +870,13 @@ class Juego(Escena):
         pregunta = self.paso.pregunta
         if n_pasos > 1:
             pregunta = f"**Paso {self.paso_i + 1} de {n_pasos}.** " + pregunta
-        s = ui.rico(pregunta, 24, TINTA, ancho=ancho, color_negrita=LAVANDA_OSC)
-        self.capas.append((s, s.get_rect(midtop=(cx, y))))
-        y += s.get_height() + 16
+        s = ui.rico(pregunta, 24, TINTA, ancho=ancho - 150, color_negrita=LAVANDA_OSC)
+        insignia = cartelito_consigna(self.es_logica)
+        total = insignia.get_width() + 12 + s.get_width()
+        x_ins = cx - total // 2
+        self.capas.append((insignia, insignia.get_rect(topleft=(x_ins, y + 1))))
+        self.capas.append((s, s.get_rect(topleft=(x_ins + insignia.get_width() + 12, y))))
+        y += max(s.get_height(), insignia.get_height()) + 16
 
         respondiendo = self.estado == "pregunta"
         if self.paso.tipo == "expresion":
@@ -802,17 +896,34 @@ class Juego(Escena):
             if respondiendo:
                 teclas = self._teclado()
                 etiquetas = [ui.formula(et, 22).sup for et, _, _ in teclas]
-                anchos = [max(48, e.get_width() + 24) for e in etiquetas]
-                total = sum(anchos) + 7 * (len(anchos) - 1)
+                anchos = [max(46, e.get_width() + 22) for e in etiquetas]
+                total = sum(anchos) + 6 * len(anchos) + 56 + 64
                 x = cx - total // 2
                 for (et, ins, ret), w, sup_et in zip(teclas, anchos, etiquetas):
                     self.botones.append(Boton((x, y, w, 40), sup_et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
                                               ARENA, radio=10, relieve=4, sonido="tecla"))
-                    x += w + 7
-                y += 56
-                x = cx - (250 + 18 + 230) // 2
-                self.botones.append(self._boton_pista((x, y, 250, 52)))
-                self.botones.append(Boton((x + 268, y, 230, 52), "Comprobar  ↵", self.comprobar, CORAL, CREMA,
+                    x += w + 6
+                self.botones.append(Boton((x, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
+                                          radio=10, relieve=4, sonido="tecla"))
+                abierto = self.app.progreso.teclado_numerico
+                self.botones.append(Boton((x + 62, y, 58, 40), "123", self.alternar_numeros,
+                                          SOL if abierto else DURAZNO, tam=17, radio=10, relieve=4, sonido="tecla"))
+                y += 50
+                if abierto:
+                    numeros = NUMEROS + [str(v) for v in self.paso.variables] + ["←", "→", "⌫"]
+                    total = len(numeros) * 52 - 6
+                    x = cx - total // 2
+                    for n in numeros:
+                        accion = {"←": self.campo.izquierda, "→": self.campo.derecha, "⌫": self.campo.borrar_atras}.get(
+                            n, (lambda n=n: self.campo.insertar(n)))
+                        self.botones.append(Boton((x, y, 46, 40), n, accion, TARJETA, tam=19, radio=10, relieve=4,
+                                                  sonido="tecla"))
+                        x += 52
+                    y += 50
+                y += 6
+                x = cx - (290 + 18 + 230) // 2
+                self.botones.append(self._boton_pista((x, y, 290, 52)))
+                self.botones.append(Boton((x + 308, y, 230, 52), "Comprobar  ↵", self.comprobar, CORAL, CREMA,
                                           tam=21, sonido=None))
                 y += 64
         else:
@@ -835,7 +946,7 @@ class Juego(Escena):
                 self.botones.append(b)
             y += ((len(ops) + 1) // 2) * (alto + 16)
             if respondiendo:
-                self.botones.append(self._boton_pista((cx - 125, y, 250, 46)))
+                self.botones.append(self._boton_pista((cx - 145, y, 290, 46)))
                 y += 58
         # globito del gato: feedback, pista o charla
         self.panel = None
@@ -876,7 +987,7 @@ class Juego(Escena):
 
     # ---------------------------------------------- acciones
     def atras(self):
-        if self.practica:
+        if self.practica and not self.mundo:
             self.app.cambiar(Cuaderno(self.app))
         else:
             self.app.cambiar(Mapa(self.app, self.mundo.id), "ola")
@@ -900,6 +1011,8 @@ class Juego(Escena):
             self.pistas_vistas += 1
             self.pistas_usadas += 1
             self.puntos = max(0, self.puntos - 5)
+            self.app.progreso.monedas = max(0, self.app.progreso.monedas - 5)
+            self.fx.texto(self.pos_monedas[0] + 30, self.pos_monedas[1] + 30, "−5", ui.CORAL, 24, sube=-20, dur=1.0)
             self.gato.reaccionar("pensando", 2.5, saltar=False)
             if self.feedback and self.feedback["tipo"] != "bien":
                 self.feedback = None
@@ -929,7 +1042,7 @@ class Juego(Escena):
                 self.acierto(nota)
             else:
                 _, titulo, cuerpo = diagnosticar_primitiva(r, p.integrando, p.var or p.variables[0], p.errores)
-                self.fallo(titulo, cuerpo)
+                self.fallo(titulo, cuerpo, tuya=self._tuya())
             return
         if equivalentes(r, p.esperado):
             self.acierto()
@@ -937,7 +1050,13 @@ class Juego(Escena):
             self.acierto(f"Está bien, pero en el parcial dejalo exacto: ${tex(p.esperado)}$.")
         else:
             _, titulo, cuerpo = diagnosticar(r, p.esperado, p.errores, p.original)
-            self.fallo(titulo, cuerpo)
+            self.fallo(titulo, cuerpo, tuya=self._tuya())
+
+    def _tuya(self):
+        try:
+            return f"${self.paso.prefijo} {tex(self._parsear(self.campo.texto, tal_cual=True), tal_cual=True)}$"
+        except Exception:
+            return self.campo.texto
 
     def elegir(self, k):
         if self.estado != "pregunta":
@@ -951,7 +1070,7 @@ class Juego(Escena):
         else:
             self.marcadas[k] = "mal"
             titulo, cuerpo = ERRORES.get(o.error, ("Todavía no", "Esa no es."))
-            self.fallo(titulo, cuerpo)
+            self.fallo(titulo, cuerpo, tuya=f"${o.tex}$" if o.tex else o.texto)
 
     def _origen(self):
         if self.paso.tipo == "expresion":
@@ -964,6 +1083,7 @@ class Juego(Escena):
         if self.tiempo:
             pts += max(0, int(self.tiempo - self.t_paso))
         self.puntos += pts
+        self.app.progreso.monedas += pts
         self.estado = "bien"
         self.charla = None
         cuerpo = self.paso.explicacion
@@ -1001,7 +1121,10 @@ class Juego(Escena):
         self.t_moneda = 0.0
         sonidos.tocar("moneda", 0.5, variar=True)
 
-    def fallo(self, titulo, cuerpo, sin_reintento=False):
+    def fallo(self, titulo, cuerpo, sin_reintento=False, tuya=""):
+        self.errores_log.append(dict(formula=self.ej.formula, consigna=self.ej.consigna, pregunta=self.paso.pregunta,
+                                     tuya=tuya, correcta=self._respuesta_tex(), titulo=titulo, cuerpo=cuerpo,
+                                     explicacion=self.paso.explicacion))
         self.vidas -= 1
         self.t_corazon = 0.0
         self.racha = 0
@@ -1109,6 +1232,7 @@ class Juego(Escena):
         self.fuego.actualizar(dt, min(1.0, self.racha / 8))
         self.gato.actualizar(dt)
         self.puntos_vistos += (self.puntos - self.puntos_vistos) * min(1, dt * 6)
+        self.monedas_vistas += (self.app.progreso.monedas - self.monedas_vistas) * min(1, dt * 5)
         if self.t_charla > 0:
             self.t_charla -= dt
             if self.t_charla <= 0 and not self.feedback:
@@ -1121,7 +1245,7 @@ class Juego(Escena):
                 self.ultimo_tic = quedan
                 sonidos.tocar("tic")
             if self.t_paso >= self.tiempo:
-                self.fallo("¡Se acabó el tiempo!", "", sin_reintento=True)
+                self.fallo("¡Se acabó el tiempo!", "", sin_reintento=True, tuya="(se acabó el tiempo)")
         if self.auto_t is not None and self.estado == "bien":
             self.auto_t -= dt
             if self.auto_t <= 0:
@@ -1132,8 +1256,8 @@ class Juego(Escena):
         r = pygame.Rect(-10, -10, ANCHO + 20, 74)
         ui.tabla_madera(sup, r, radio=0)
         t = ui.texto_borde(self.titulo, 24, CREMA, MADERA_OSC, 2)
-        sup.blit(t, (192, 32 - t.get_height() // 2))
-        x = 192 + t.get_width() + 12
+        sup.blit(t, (248, 32 - t.get_height() // 2))
+        x = 248 + t.get_width() + 12
         if self.jefe:
             et = ui.texto_borde("JEFE", 16, CREMA, ui.CORAL_OSC, 2)
             rr = pygame.Rect(x, 18, et.get_width() + 18, 28)
@@ -1159,8 +1283,10 @@ class Juego(Escena):
         mx, my = self.pos_monedas
         bump = 1 + 0.35 * max(0.0, 1 - self.t_moneda / 0.25)
         ui.moneda(sup, (mx, my), 14 * bump)
-        pts = ui.texto_borde(str(int(round(self.puntos_vistos))), 24, CREMA, MADERA_OSC, 2)
-        sup.blit(pts, pts.get_rect(midleft=(mx + 22, my)))
+        pts = ui.texto_borde(str(int(round(self.monedas_vistas))), 24, CREMA, MADERA_OSC, 2)
+        sup.blit(pts, pts.get_rect(midleft=(mx + 22, my - 4)))
+        nivel_txt = ui.texto(f"+{self.puntos} en este nivel", 12, (255, 236, 190), negrita=True)
+        sup.blit(nivel_txt, nivel_txt.get_rect(midleft=(mx - 8, my + 21)))
         # racha con fuego
         if self.racha >= 2:
             fx = mx - 70
@@ -1196,6 +1322,8 @@ class Juego(Escena):
 
     def dibujar(self, sup):
         sup.blit(paisaje.pergamino(), (0, 0))
+        if self.es_logica:
+            sup.blit(_velo_logica(), (0, 0))
         k = suave(self.t_entrada / 0.35)
         dx = int((1 - k) * 90)
         for s, r in self.capas:
@@ -1246,8 +1374,8 @@ class Juego(Escena):
                 if b.rect.colliderect(p["rect"]) and b.rect.top > p["rect"].top:
                     b.dibujar(sup)
         self._dibujar_encabezado(sup)
-        self.botones[0].dibujar(sup)
-        self.botones[1].dibujar(sup)
+        for b in self.botones[:3]:
+            b.dibujar(sup)
         self.fx.dibujar(sup)
 
 
@@ -1275,7 +1403,7 @@ class FinNivel(Escena):
         self.estrellas_hechas = 0
         self.puntos_vistos = 0
         self.ultimo_tic = 0
-        app.progreso.sumar_monedas(juego.puntos)
+        app.progreso.guardar()      # las monedas ya se fueron sumando durante el nivel
         sonidos.agachar(2.5)
         if gano:
             self.gato.reaccionar("festejo", 99)
@@ -1290,29 +1418,39 @@ class FinNivel(Escena):
             self.fx.lluvia(ANCHO, 90)
             sonidos.tocar("perder")
         cx, y = ANCHO // 2 + 120, 594
-        b = []
+        # de izquierda a derecha: revisar errores, mapa y, abajo a la derecha, lo que sigue
+        revisar = ("Revisar errores", lambda: app.cambiar(RevisarErrores(app, juego, self), "fundido"), SOL, TINTA)
+        b = [revisar]
         if juego.practica:
-            b.append(("Volver al cuaderno", lambda: app.cambiar(Cuaderno(app)), CORAL, CREMA))
+            if juego.mundo:
+                b.append(("Volver al mapa", lambda: app.cambiar(Mapa(app, juego.mundo.id), "ola"), CORAL, CREMA))
+            else:
+                b.append(("Volver al cuaderno", lambda: app.cambiar(Cuaderno(app)), CORAL, CREMA))
         else:
             m, i = juego.mundo, juego.nivel_idx
-            if gano:
-                if i + 1 < len(m.niveles):
-                    b.append(("Siguiente nivel", lambda: app.cambiar(Juego(app, m.id, i + 1), "ola"), CORAL, CREMA))
-                elif nuevo_mundo:
-                    b.append(("¡A la isla nueva!", lambda: app.cambiar(Mapa(app, nuevo_mundo.id), "ola"), CORAL, CREMA))
-                b.append(("Repetir", lambda: app.cambiar(Juego(app, m.id, i), "ola"), LAVANDA, TINTA))
-            else:
-                b.append(("Reintentar", lambda: app.cambiar(Juego(app, m.id, i), "ola"), CORAL, CREMA))
-            b.append(("Mapa", lambda: app.cambiar(Mapa(app, m.id), "ola"), ARENA, TINTA))
+            principal = None
+            if not gano:
+                principal = ("Reintentar", lambda: app.cambiar(Juego(app, m.id, i), "ola"), CORAL, CREMA)
+            elif i + 1 < len(m.niveles):
+                principal = ("Siguiente nivel", lambda: app.cambiar(Juego(app, m.id, i + 1), "ola"), CORAL, CREMA)
+            elif nuevo_mundo:
+                principal = ("¡A la isla nueva!", lambda: app.cambiar(Mapa(app, nuevo_mundo.id), "ola"), CORAL, CREMA)
+            b.append(("Mapa", lambda: app.cambiar(Mapa(app, m.id), "ola"), ARENA if principal else CORAL,
+                      TINTA if principal else CREMA))
+            if principal:
+                b.append(principal)
         total = len(b) * 230 + (len(b) - 1) * 18
         x = cx - total // 2
         for k, (txt, acc, col, ct) in enumerate(b):
-            teclas = [pygame.K_RETURN, pygame.K_KP_ENTER] if k == 0 else None
-            self.botones.append(Boton((x, y, 230, 62), txt, acc, col, ct, tam=22, tecla=teclas))
+            ultimo = k == len(b) - 1
+            boton = Boton((x, y, 230, 62), txt, acc, col, ct, tam=21,
+                          tecla=[pygame.K_RETURN, pygame.K_KP_ENTER] if ultimo else None,
+                          habilitado=bool(juego.errores_log) if k == 0 else True)
+            self.botones.append(boton)
             x += 248
 
     def atras(self):
-        if self.j.practica:
+        if self.j.practica and not self.j.mundo:
             self.app.cambiar(Cuaderno(self.app))
         else:
             self.app.cambiar(Mapa(self.app, self.j.mundo.id), "ola")
@@ -1738,6 +1876,8 @@ class Opciones(Escena):
 # =============================================================== TIENDA DEL MICHI
 
 class Tienda(Escena):
+    COLS, FILAS = 5, 4
+
     def __init__(self, app):
         super().__init__(app)
         self.cielo = paisaje.Cielo(semilla=8, nubes=4)
@@ -1745,8 +1885,8 @@ class Tienda(Escena):
         self.gato = Gato(250)
         self.gato.reaccionar("feliz", 1.2)
         self.fx = Efectos()
-        self.lugar = "cabeza"
-        self.sel = None
+        self.lugar = "conjuntos"
+        self.sel = None              # id de prenda o de conjunto que se está probando
         self.t = 0.0
         self.mensaje = "¡Elegí algo para probarle!"
         self.armar()
@@ -1758,62 +1898,81 @@ class Tienda(Escena):
     def atras(self):
         self.app.cambiar(Menu(self.app), "ola")
 
-    def _puesta(self):
-        return dict(self.prog.ropa_puesta)
-
     def _sincronizar(self):
         modulo_gato.ROPA = tuple(self.prog.ropa_puesta.values())
 
+    # ---- conjuntos y prendas con la misma interfaz
+    def _piezas(self, item_id):
+        c = ropa.CONJUNTO_POR_ID.get(item_id)
+        return c.piezas if c else (item_id,)
+
+    def _precio(self, item_id):
+        c = ropa.CONJUNTO_POR_ID.get(item_id)
+        return c.precio if c else ropa.POR_ID[item_id].precio
+
+    def _nombre(self, item_id):
+        c = ropa.CONJUNTO_POR_ID.get(item_id)
+        return c.nombre if c else ropa.POR_ID[item_id].nombre
+
+    def _tiene(self, item_id):
+        return all(p in self.prog.ropa_comprada for p in self._piezas(item_id))
+
+    def _puesto(self, item_id):
+        return all(self.prog.ropa_puesta.get(ropa.POR_ID[p].lugar) == p for p in self._piezas(item_id))
+
     def _probando(self):
-        puesta = self._puesta()
+        puesta = dict(self.prog.ropa_puesta)
         if self.sel:
-            puesta[ropa.POR_ID[self.sel].lugar] = self.sel
+            for p in self._piezas(self.sel):
+                puesta[ropa.POR_ID[p].lugar] = p
         return tuple(puesta.values())
 
-    def _tarjeta(self, p, w, h):
+    def _items(self):
+        if self.lugar == "conjuntos":
+            return [c.id for c in ropa.CONJUNTOS]
+        return [p.id for p in ropa.CATALOGO if p.lugar == self.lugar]
+
+    def _tarjeta(self, item_id, w, h):
         s = pygame.Surface((w, h), pygame.SRCALPHA)
-        img = modulo_gato.superficie(84, "normal", ropa=(p.id,))
-        s.blit(img, img.get_rect(midtop=(w // 2, -8)))
-        nombre = ui.escalar_a(ui.texto(p.nombre, 15, TINTA, negrita=True), w - 8)
-        s.blit(nombre, nombre.get_rect(midtop=(w // 2, h - 46)))
-        if self.prog.ropa_puesta.get(p.lugar) == p.id:
-            et = ui.texto("¡Puesto!", 16, MENTA_OSC, negrita=True)
-            s.blit(et, et.get_rect(midtop=(w // 2, h - 24)))
-        elif p.id in self.prog.ropa_comprada:
-            et = ui.texto("Es tuyo", 16, ui.LAVANDA_OSC, negrita=True)
-            s.blit(et, et.get_rect(midtop=(w // 2, h - 24)))
+        img = modulo_gato.superficie(66, "normal", ropa=self._piezas(item_id))
+        s.blit(img, img.get_rect(midtop=(w // 2, -10)))
+        nombre = ui.escalar_a(ui.texto(self._nombre(item_id), 13, TINTA, negrita=True), w - 6)
+        s.blit(nombre, nombre.get_rect(midtop=(w // 2, h - 38)))
+        if self._puesto(item_id):
+            et = ui.texto("¡Puesto!", 14, MENTA_OSC, negrita=True)
+            s.blit(et, et.get_rect(midtop=(w // 2, h - 20)))
+        elif self._tiene(item_id):
+            et = ui.texto("Es tuyo", 14, ui.LAVANDA_OSC, negrita=True)
+            s.blit(et, et.get_rect(midtop=(w // 2, h - 20)))
         else:
-            et = ui.texto(str(p.precio), 17, ui.SOL_OSC if self.prog.monedas >= p.precio else SUAVE, negrita=True)
-            ancho = et.get_width() + 24
+            precio = self._precio(item_id)
+            et = ui.texto(str(precio), 15, ui.SOL_OSC if self.prog.monedas >= precio else SUAVE, negrita=True)
+            ancho = et.get_width() + 20
             x = w // 2 - ancho // 2
-            ui.moneda(s, (x + 8, h - 14), 9)
-            s.blit(et, (x + 22, h - 24))
+            ui.moneda(s, (x + 7, h - 11), 8)
+            s.blit(et, (x + 18, h - 20))
         return s
 
     def armar(self):
         self.botones = [Boton((24, 22, 128, 50), "Menú", self.atras, DURAZNO, tam=22),
                         self.boton_opciones((ANCHO - 76, 22, 56, 50))]
-        x0 = 572
-        for k, (clave, nombre) in enumerate(ropa.LUGARES):
-            self.botones.append(Boton((x0 + k * 134, 112, 124, 46), nombre, (lambda c=clave: self.elegir_lugar(c)),
-                                      SOL if clave == self.lugar else ARENA, tam=19, relieve=4, sonido="tecla"))
-        items = [p for p in ropa.CATALOGO if p.lugar == self.lugar]
-        w, h = 150, 150
-        for k, p in enumerate(items):
-            fila, col = divmod(k, 4)
-            rect = (x0 + col * (w + 14), 182 + fila * (h + 16), w, h)
-            puesto = self.prog.ropa_puesta.get(p.lugar) == p.id
-            color = (226, 246, 210) if puesto else ((255, 236, 196) if p.id == self.sel else TARJETA)
-            b = Boton(rect, self._tarjeta(p, w - 12, h - 12), (lambda pid=p.id: self.tocar(pid)), color,
-                      radio=16, relieve=5, sonido="tecla")
-            self.botones.append(b)
-        # botón de acción debajo del gato
-        if self.sel:
-            p = ropa.POR_ID[self.sel]
-            if p.id not in self.prog.ropa_comprada:
-                alcanza = self.prog.monedas >= p.precio
-                self.botones.append(Boton((90, 602, 380, 64), f"Comprar · {p.precio}", self.comprar, CORAL, CREMA,
-                                          tam=26, habilitado=alcanza, sonido=None))
+        pestañas = [("conjuntos", "Conjuntos")] + ropa.LUGARES
+        x0, ancho_p = 566, 82
+        for k, (clave, nombre) in enumerate(pestañas):
+            self.botones.append(Boton((x0 + k * (ancho_p + 4), 110, ancho_p, 42), nombre,
+                                      (lambda c=clave: self.elegir_lugar(c)),
+                                      SOL if clave == self.lugar else ARENA, tam=13, relieve=4, sonido="tecla", radio=12))
+        w, h = 128, 116
+        for k, item in enumerate(self._items()[:self.COLS * self.FILAS]):
+            fila, col = divmod(k, self.COLS)
+            rect = (x0 + col * (w + 8), 166 + fila * (h + 10), w, h)
+            color = (226, 246, 210) if self._puesto(item) else ((255, 236, 196) if item == self.sel else TARJETA)
+            self.botones.append(Boton(rect, self._tarjeta(item, w - 10, h - 8), (lambda i=item: self.tocar(i)), color,
+                                      radio=14, relieve=4, sonido="tecla"))
+        if self.sel and not self._tiene(self.sel):
+            alcanza = self.prog.monedas >= self._precio(self.sel)
+            self.botones.append(Boton((90, 602, 380, 64), f"Comprar · {self._precio(self.sel)}", self.comprar, CORAL,
+                                      CREMA, tam=26, habilitado=alcanza, sonido=None))
         if self.prog.ropa_puesta:
             self.botones.append(Boton((180, 676, 200, 38), "Sacarle todo", self.sacar_todo, ARENA, tam=16, relieve=4))
 
@@ -1821,41 +1980,44 @@ class Tienda(Escena):
         self.lugar = clave
         self.armar()
 
-    def tocar(self, pid):
-        p = ropa.POR_ID[pid]
-        if pid in self.prog.ropa_comprada:
-            if self.prog.ropa_puesta.get(p.lugar) == pid:
-                self.prog.poner(p.lugar, None)
-                self.mensaje = f"Le sacaste: {p.nombre}"
+    def tocar(self, item_id):
+        nombre = self._nombre(item_id)
+        if self._tiene(item_id):
+            if self._puesto(item_id):
+                for p in self._piezas(item_id):
+                    self.prog.poner(ropa.POR_ID[p].lugar, None)
+                self.mensaje = f"Le sacaste: {nombre}"
                 self.gato.reaccionar("sorpresa", 0.8, saltar=False)
             else:
-                self.prog.poner(p.lugar, pid)
-                self.mensaje = f"¡Le pusiste: {p.nombre}!"
+                for p in self._piezas(item_id):
+                    self.prog.poner(ropa.POR_ID[p].lugar, p)
+                self.mensaje = f"¡Le pusiste: {nombre}!"
                 self.gato.reaccionar("feliz", 1.0)
                 sonidos.tocar("estrella", 0.6)
             self.sel = None
             self._sincronizar()
         else:
-            self.sel = pid
-            faltan = p.precio - self.prog.monedas
-            self.mensaje = (f"Probándose: {p.nombre}" if faltan <= 0
-                            else f"Te faltan {faltan} monedas para: {p.nombre}")
+            self.sel = item_id
+            faltan = self._precio(item_id) - self.prog.monedas
+            self.mensaje = (f"Probándose: {nombre}" if faltan <= 0 else f"Te faltan {faltan} monedas para: {nombre}")
             self.gato.reaccionar("sorpresa" if faltan > 0 else "feliz", 0.9, saltar=faltan <= 0)
         self.armar()
 
     def comprar(self):
-        p = ropa.POR_ID[self.sel]
-        if self.prog.comprar(p.id, p.precio):
-            self.prog.poner(p.lugar, p.id)
+        item = self.sel
+        ok = self.prog.comprar_conjunto(self._piezas(item), self._precio(item))
+        if ok:
+            for p in self._piezas(item):
+                self.prog.poner(ropa.POR_ID[p].lugar, p)
             self._sincronizar()
             sonidos.tocar("desbloqueo")
             sonidos.tocar("miau")
             sonidos.agachar(1.2)
-            self.fx.confeti(270, 420, 60, 1.2)
-            self.fx.chispas(270, 460, 24, ui.SOL, 340)
-            self.fx.texto(270, 330, f"−{p.precio}", ui.SOL, 40)
+            self.fx.confeti(270, 420, 60, 1.0)
+            self.fx.chispas(270, 460, 24, ui.SOL, 300)
+            self.fx.texto(270, 330, f"−{self._precio(item)}", ui.SOL, 40, sube=30, dur=1.5)
             self.gato.reaccionar("festejo", 2.0)
-            self.mensaje = f"¡Compraste: {p.nombre}!"
+            self.mensaje = f"¡Compraste: {self._nombre(item)}!"
             self.sel = None
         else:
             sonidos.tocar("mal")
@@ -1880,11 +2042,9 @@ class Tienda(Escena):
     def dibujar(self, sup):
         self.cielo.dibujar(sup, sol=False)
         self.mar.dibujar(sup)
-        # playa
         pts = [(0, ALTO)] + [(x, 520 + 10 * math.sin(x / 70 + 1)) for x in range(0, 561, 20)] + [(560, ALTO)]
         pygame.draw.polygon(sup, ui.ARENA, pts)
         pygame.draw.lines(sup, ui.ESPUMA, False, pts[1:-1], 5)
-        # alfombrita y gato
         pygame.draw.ellipse(sup, BORDE, (120, 528, 300, 70))
         pygame.draw.ellipse(sup, CORAL, (124, 528, 292, 62))
         pygame.draw.ellipse(sup, (255, 170, 150), (150, 538, 240, 42), 4)
@@ -1892,15 +2052,16 @@ class Tienda(Escena):
         nombre = self.app.progreso.nombre_gato
         letrero(sup, (ANCHO // 2 - 250, 16, 500, 64), f"Tienda de {nombre}" if nombre else "Tienda del michi", 30)
         dibujar_monedero(sup, self.prog.monedas, (ANCHO - 92, 22))
-        # cartel con el mensaje, arriba del gato
         msg = ui.rico(self.mensaje, 20, TINTA, ancho=380, centrado=True)
         caja = pygame.Rect(0, 0, 420, msg.get_height() + 28)
         caja.midtop = (270, 100)
         ui.globo(sup, caja, (330, 200), TARJETA)
         sup.blit(msg, msg.get_rect(center=caja.center))
-        # panel de prendas
         panel = pygame.Rect(552, 96, 708, 610)
         ui.tarjeta(sup, panel, ui.PERGAMINO, 24, ui.ARENA_OSC, 6)
+        if self.lugar == "conjuntos":
+            nota = ui.texto("Los conjuntos traen varias prendas juntas, más baratas que por separado.", 14, SUAVE)
+            sup.blit(nota, (566, 684))
         self.dibujar_botones(sup)
         self.fx.dibujar(sup)
 
@@ -1998,3 +2159,76 @@ class NombreGato(Escena):
         sup.blit(ui.texto("O elegí uno:", 18, SUAVE, negrita=True), (560, 372))
         self.dibujar_botones(sup)
         self.fx.dibujar(sup)
+
+
+# =============================================================== REVISAR ERRORES
+
+class RevisarErrores(Escena):
+    """Los errores del nivel que terminaste: qué pusiste, qué era y por qué."""
+
+    def __init__(self, app, juego, volver):
+        super().__init__(app)
+        self.j = juego
+        self.volver = volver
+        self.scroll = 0.0
+        self.objetivo = 0.0
+        self.gato = Gato(110)
+        self.gato.animo_base = "pensando"
+        self.gato.animo = "pensando"
+        self.tarjetas = [self._tarjeta(e) for e in juego.errores_log]
+        self.alto_total = sum(t.get_height() + 16 for t in self.tarjetas)
+        self.botones = [Boton((24, 22, 140, 50), "Volver", self.atras, DURAZNO, tam=22)]
+
+    def _tarjeta(self, e):
+        w = 980
+        partes = [ui.rico(e["consigna"], 16, SUAVE, ancho=w - 40),
+                  ui.escalar_a(ui.formula(e["formula"], 30).sup, w - 40),
+                  ui.rico(f"**{e['titulo']}**", 20, ui.CORAL_OSC, ancho=w - 40, color_negrita=ui.CORAL_OSC)]
+        if e["tuya"]:
+            partes.append(ui.rico(f"Pusiste:  {e['tuya']}", 18, TINTA, ancho=w - 40))
+        partes.append(ui.rico(f"Era:  {e['correcta']}", 18, MENTA_OSC, ancho=w - 40))
+        explicacion = "\n".join(t for t in (e["cuerpo"], e["explicacion"]) if t)
+        if explicacion:
+            partes.append(ui.rico(explicacion, 16, SUAVE, ancho=w - 40))
+        alto = sum(p.get_height() + 6 for p in partes) + 24
+        s = pygame.Surface((w, alto), pygame.SRCALPHA)
+        pygame.draw.rect(s, (226, 210, 180), s.get_rect().move(0, 4), border_radius=16)
+        pygame.draw.rect(s, TARJETA, s.get_rect().inflate(0, -4).move(0, -2), border_radius=16)
+        pygame.draw.rect(s, ui.ARENA_OSC, s.get_rect().inflate(0, -4).move(0, -2), 2, border_radius=16)
+        y = 12
+        for p in partes:
+            s.blit(p, (20, y))
+            y += p.get_height() + 6
+        return s
+
+    def atras(self):
+        self.app.cambiar(self.volver, "fundido")
+
+    def evento(self, e):
+        if e.type == pygame.MOUSEWHEEL:
+            self.objetivo = max(0, min(max(0, self.alto_total - 520), self.objetivo - e.y * 60))
+            return True
+        if e.type == pygame.KEYDOWN and e.key in (pygame.K_DOWN, pygame.K_UP):
+            self.objetivo = max(0, min(max(0, self.alto_total - 520), self.objetivo + (60 if e.key == pygame.K_DOWN else -60)))
+            return True
+        return super().evento(e)
+
+    def actualizar(self, dt):
+        self.scroll += (self.objetivo - self.scroll) * min(1, dt * 10)
+        self.gato.actualizar(dt)
+
+    def dibujar(self, sup):
+        sup.blit(paisaje.pergamino(), (0, 0))
+        letrero(sup, (ANCHO // 2 - 230, 16, 460, 62), "Revisar errores", 30)
+        clip = sup.get_clip()
+        sup.set_clip(pygame.Rect(0, 96, ANCHO, ALTO - 96))
+        y = 110 - self.scroll
+        for t in self.tarjetas:
+            sup.blit(t, (ANCHO // 2 - t.get_width() // 2 + 60, y))
+            y += t.get_height() + 16
+        sup.set_clip(clip)
+        if self.alto_total > 560:
+            sup.blit(ui.texto("Usá la ruedita del mouse (o las flechas) para ver más", 15, SUAVE, negrita=True),
+                     (ANCHO - 450, 66))
+        self.gato.dibujar(sup, (90, ALTO - 10))
+        self.dibujar_botones(sup)

@@ -101,6 +101,7 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
     # patas de atrás
     elipse(R(52, 196, 38, 20), NARANJA)
     elipse(R(110, 196, 38, 20), NARANJA)
+    prendas.dibujar_capa("cuerpo", ropa, lz)
     # ---- brazos (los levantados se dibujan después de la cabeza)
     if not brazos:
         elipse(R(72, 188, 26, 22), CREMA)
@@ -170,7 +171,7 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
     # bigotes
     for (x1, y1, x2, y2) in [(56, 100, 22, 94), (56, 107, 24, 110), (144, 100, 178, 94), (144, 107, 176, 110)]:
         pygame.draw.line(s, BORDE, P(x1, y1), P(x2, y2), max(1, int(2 * K)))
-    for capa in ("cuello", "cara", "cabeza"):
+    for capa in ("cuello", "cara", "cabeza", "mano"):
         prendas.dibujar_capa(capa, ropa, lz)
     return pygame.transform.smoothscale(s, (int(W / 2), int(H / 2)))
 

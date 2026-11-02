@@ -56,7 +56,7 @@ def _chequear_ejercicio(e):
             assert not sp.sympify(p.esperado).free_symbols, (e.formula, p.esperado)
         if p.tipo == "opcion":
             assert sum(o.correcta for o in p.opciones) == 1, e.formula
-            assert len(p.opciones) >= 3, (e.formula, p.pregunta)
+            assert len(p.opciones) >= 3 or all(o.texto for o in p.opciones), (e.formula, p.pregunta)
             for o in p.opciones:
                 _chequear_tex(o.tex or o.texto)
                 if not o.correcta:

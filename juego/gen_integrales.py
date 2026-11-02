@@ -408,9 +408,11 @@ def _paso_u(ctx, f, g, h, nucleo):
     malas = [(f"u = {tex(h.h(g))}", "sust_u_todo"), (f"u = {tex(nucleo)}", "sust_u_derivada"),
              ("u = x", "adentro_x"), (f"u = {tex(f)}", "sust_u_todo")]
     malas = [(t, c) for t, c in malas if t != f"u = {tex(g)}" and t != "u = 1"]
-    return paso_elegir(ctx, "¿Qué conviene llamar $u$?", f"u = {tex(g)}", malas,
+    paso = paso_elegir(ctx, "¿Qué conviene llamar $u$?", f"u = {tex(g)}", malas,
                        f"$u = {tex(g)}$: está adentro de otra función y su derivada aparece multiplicando.",
                        f"$u = {tex(g)}$")
+    paso.repetitivo = ctx.modo != "opciones"
+    return paso
 
 
 def _errores_sust(g, h, k, c, F):
@@ -449,9 +451,9 @@ def g_lineal(ctx):
     """∫ e^{kx}, sen(kx), (ax+b)^n...: se divide por la constante de adentro."""
     rng = ctx.rng
     k = rng.choice([2, 3, 4, 5, -2, -3])
-    b = rng.choice([0, 0, 1, 2, -1, 3])
-    u = k * x + b
     tipo = rng.choice(["exp", "sen", "cos", "pot", "inv"])
+    b = rng.choice([1, 2, -1, 3, 4]) if tipo in ("pot", "inv") else rng.choice([0, 0, 1, 2, -1, 3])
+    u = k * x + b
     h = _afuera_int(rng, tipo)
     f = h.h(u)
     F = h.H(u) / k
@@ -551,8 +553,9 @@ def g_partes(ctx, con_log=False):
                          [(sp.diff(dv, x), "partes_v_derivada")],
                          [f"$v = \\int {tex_par(dv)}\\,dx$. Ojo: a $dv$ se lo **integra**."], "", forzar_tipeo=True)
     p_v.resumen = f"$v = {tex(v)}$"
-    return Ejercicio("Calculá la integral (por partes):", tex_int(f),
-                     [_paso_eleccion_partes(ctx, f, u, dv), p_du, p_v, final])
+    eleccion = _paso_eleccion_partes(ctx, f, u, dv)
+    eleccion.repetitivo = True
+    return Ejercicio("Calculá la integral (por partes):", tex_int(f), [eleccion, p_du, p_v, final])
 
 
 def g_partes_log(ctx):
