@@ -664,12 +664,17 @@ class Mapa(Escena):
 
 # =============================================================== JUEGO
 
-# (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor) — como en la calculadora
-TECLADO = [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1),
-           (r"(\;\;)", "()", 1), ("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0), ("/", "/", 0),
-           (r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{n}", "e^()", 1), (r"\ln", "ln()", 1)]
-FUNCIONES_TECLADO = (r"\mathrm{sen}", r"\cos", "e^{n}", r"\ln")
-NUMEROS = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", ","]
+# (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor) — como en la calculadora.
+# Van por grupos (cada uno con su color), en el orden en que se piensa una fórmula:
+# operaciones, potencias y raíces, funciones. Los extras (y, z, +C, π, e) van al final.
+GRUPOS_TECLADO = [
+    ("operaciones", [("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0), ("/", "/", 0), (r"(\;\;)", "()", 1)]),
+    ("potencias", [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1)]),
+    ("funciones", [(r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{n}", "e^()", 1), (r"\ln", "ln()", 1)]),
+]
+COLORES_TECLADO = {"operaciones": (250, 238, 214), "potencias": (206, 238, 216), "funciones": (226, 214, 250),
+                   "extras": (255, 228, 186)}
+NUMEROS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ","]
 
 PIE_GATO = (96, ALTO - 8)
 BOCA_GATO = (150, ALTO - 120)
@@ -801,7 +806,8 @@ class Juego(Escena):
         return ""
 
     def _teclado(self):
-        teclas = list(TECLADO)
+        """Lista de (grupo, teclas)."""
+        grupos = [(n, list(g)) for n, g in GRUPOS_TECLADO]
         extra = []
         if VAR_Y in self.paso.variables:
             extra.append(("y", "y", 0))
@@ -811,8 +817,10 @@ class Juego(Escena):
             extra.append((r"+\,C", "+C", 0))
         if self.paso.chequeo == "numero":
             extra = [(r"\pi", "pi", 0), ("e", "e", 0)]
-            teclas = [t for t in teclas if t[0] not in FUNCIONES_TECLADO]
-        return teclas + extra
+            grupos = [(n, g) for n, g in grupos if n != "funciones"]
+        if extra:
+            grupos.append(("extras", extra))
+        return grupos
 
     def alternar_numeros(self):
         self.app.progreso.teclado_numerico = not self.app.progreso.teclado_numerico
@@ -941,26 +949,39 @@ class Juego(Escena):
             self.y_preview = y
             y += 44
             if respondiendo:
-                teclas = self._teclado()
-                etiquetas = [ui.formula(et, 22).sup for et, _, _ in teclas]
-                anchos = [max(46, e.get_width() + 22) for e in etiquetas]
-                total = sum(anchos) + 6 * len(anchos) + 56 + 64
+                grupos = self._teclado()
+                hueco = 16   # espacio entre grupos
+                teclas = []
+                for nombre, lista in grupos:
+                    for et, ins, ret in lista:
+                        sup_et = ui.formula(et, 22).sup
+                        teclas.append((nombre, sup_et, max(46, sup_et.get_width() + 22), ins, ret))
+                total = sum(t[2] for t in teclas) + 6 * len(teclas) + hueco * len(grupos) + 58 + 6 + 56
                 x = cx - total // 2
-                for (et, ins, ret), w, sup_et in zip(teclas, anchos, etiquetas):
+                anterior = None
+                for nombre, sup_et, w, ins, ret in teclas:
+                    if anterior is not None and nombre != anterior:
+                        x += hueco
+                    anterior = nombre
                     self.botones.append(Boton((x, y, w, 40), sup_et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
-                                              ARENA, radio=10, relieve=4, sonido="tecla"))
+                                              COLORES_TECLADO[nombre], radio=10, relieve=4, sonido="tecla"))
                     x += w + 6
-                self.botones.append(Boton((x, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
-                                          radio=10, relieve=4, sonido="tecla"))
+                x += hueco
                 abierto = self.app.progreso.teclado_numerico
-                self.botones.append(Boton((x + 62, y, 58, 40), "123", self.alternar_numeros,
+                self.botones.append(Boton((x, y, 58, 40), "123", self.alternar_numeros,
                                           SOL if abierto else DURAZNO, tam=17, radio=10, relieve=4, sonido="tecla"))
+                self.botones.append(Boton((x + 64, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
+                                          radio=10, relieve=4, sonido="tecla"))
                 y += 50
                 if abierto:
-                    numeros = NUMEROS + [str(v) for v in self.paso.variables] + ["←", "→", "⌫"]
-                    total = len(numeros) * 52 - 6
+                    variables = [str(v) for v in self.paso.variables]
+                    numeros = NUMEROS + [None] + variables + [None, "←", "→", "⌫"]
+                    total = (len(numeros) - 2) * 52 - 6 + 2 * hueco
                     x = cx - total // 2
                     for n in numeros:
+                        if n is None:      # separación entre números, letras y flechas
+                            x += hueco
+                            continue
                         accion = {"←": self.campo.izquierda, "→": self.campo.derecha, "⌫": self.campo.borrar_atras}.get(
                             n, (lambda n=n: self.campo.insertar(n)))
                         self.botones.append(Boton((x, y, 46, 40), n, accion, TARJETA, tam=19, radio=10, relieve=4,
