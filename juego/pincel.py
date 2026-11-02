@@ -828,3 +828,80 @@ def pergamino(w, h):
             [0, 0.62, 1], skia.TileMode.kClamp, 0, skia.Matrix.Scale(1, h / w * 1.25))))
 
     return _pieza(("pergamino", w, h), w, h, pintar, 0, forzar=True)
+
+
+# ---------------------------------------------------------------- controles
+def campo(w, h, borde, radio=14):
+    """Cuadro donde se escribe: blanco, con sombrita interior arriba (parece hundido)."""
+    m = 4
+
+    def pintar(cv):
+        cara = _rrect(0, 0, w, h, radio)
+        cv.drawRRect(cara, _paint((255, 255, 255)))
+        cv.save()
+        cv.clipRRect(cara, doAntiAlias=True)
+        cv.drawRect(skia.Rect.MakeXYWH(0, 0, w, 16), _paint(Shader=_lineal(0, 0, 0, 16, [(120, 96, 70, 46), (120, 96, 70, 0)])))
+        cv.restore()
+        cv.drawRRect(_rrect(1.5, 1.5, w - 3, h - 3, radio - 1.5),
+                     _paint(borde, Style=skia.Paint.kStroke_Style, StrokeWidth=3))
+
+    return _pieza(("campo", w, h, tuple(borde), radio), w, h, pintar, m), m
+
+
+def resplandor(w, h, color, radio=18):
+    """Halo difuso alrededor de un rectángulo (el cuadro de texto cuando está activo)."""
+    m = 16
+
+    def pintar(cv):
+        cv.drawRRect(_rrect(-4, -4, w + 8, h + 8, radio + 4),
+                     _paint(color, 200, Style=skia.Paint.kStroke_Style, StrokeWidth=6,
+                            MaskFilter=skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 4)))
+
+    return _pieza(("resplandor", w, h, tuple(color), radio), w, h, pintar, m), m
+
+
+def pista(w, h, color, borde=(92, 62, 46)):
+    """Canaleta hundida (interruptores, deslizadores, barra de tiempo)."""
+    m = 4
+
+    def pintar(cv):
+        r = h / 2 + 1.5
+        cv.drawRRect(_rrect(-3, -3, w + 6, h + 6, r + 1.5), _paint(borde))
+        forma = _rrect(0, 0, w, h, h / 2)
+        cv.drawRRect(forma, _paint(Shader=_lineal(0, 0, 0, h, [oscurecer(color, 0.86), color, aclarar(color, 0.12)],
+                                                  [0, 0.45, 1])))
+        cv.save()
+        cv.clipRRect(forma, doAntiAlias=True)
+        cv.drawRRect(_rrect(0, -h * 0.6, w, h, h / 2), _paint((60, 40, 30), 40, Style=skia.Paint.kStroke_Style,
+                                                               StrokeWidth=3, MaskFilter=skia.MaskFilter.MakeBlur(
+                                                                   skia.kNormal_BlurStyle, 1.5)))
+        cv.restore()
+
+    return _pieza(("pista", w, round(h, 1), tuple(color), tuple(borde)), w, h, pintar, m), m
+
+
+def relleno(w, h, color):
+    """La parte llena de una barra: con volumen y brillo arriba."""
+    def pintar(cv):
+        forma = _rrect(0, 0, w, h, h / 2)
+        cv.drawRRect(forma, _paint(Shader=_lineal(0, 0, 0, h, [aclarar(color, 0.25), color, oscurecer(color, 0.85)],
+                                                  [0, 0.5, 1])))
+        if h >= 8:
+            cv.drawRRect(_rrect(h / 3, 1.5, max(1, w - 2 * h / 3), h * 0.32, h * 0.16), _paint((255, 255, 255), 110))
+
+    return _pieza(("relleno", int(w), round(h, 1), tuple(color)), max(1, int(w)), h, pintar, 0)
+
+
+def pastilla(w, h, color, borde=(92, 62, 46)):
+    """Cartelito redondeado con brillo (PENSÁ / CALCULÁ)."""
+    m = 6
+
+    def pintar(cv):
+        cv.drawRRect(_rrect(1, 3, w - 2, h, h / 2), _sombra(2.5, 60))
+        cv.drawRRect(_rrect(0, 0, w, h, h / 2), _paint(borde))
+        cv.drawRRect(_rrect(2, 2, w - 4, h - 4, h / 2 - 2),
+                     _paint(Shader=_lineal(0, 2, 0, h - 2, [aclarar(color, 0.22), color, oscurecer(color, 0.88)],
+                                           [0, 0.55, 1])))
+        cv.drawRRect(_rrect(h / 3, 4, w - 2 * h / 3, h * 0.3, h * 0.15), _paint((255, 255, 255), 90))
+
+    return _pieza(("pastilla", w, h, tuple(color), tuple(borde)), w, h, pintar, m), m

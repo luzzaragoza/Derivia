@@ -72,9 +72,16 @@ def cartelito_consigna(logica):
     texto = "PENSÁ" if logica else "CALCULÁ"
     color = (150, 110, 220) if logica else ui.CORAL
     t = ui.texto(texto, 15, CREMA, negrita=True)
-    s = Lienzo(t.get_width() + 44, 30)
-    dibujo.rect(s, BORDE, s.get_rect(), border_radius=15)
-    dibujo.rect(s, color, s.get_rect().inflate(-4, -4), border_radius=13)
+    s = Lienzo(t.get_width() + 44 + 12, 30 + 12)
+    pieza, m = pincel.pastilla(t.get_width() + 44, 30, color) if pincel.HAY_SKIA else (None, 0)
+    if pieza is not None:
+        s.blit(pieza, (6 - m, 6 - m))
+    else:
+        dibujo.rect(s, BORDE, (6, 6, t.get_width() + 44, 30), border_radius=15)
+        dibujo.rect(s, color, pygame.Rect(6, 6, t.get_width() + 44, 30).inflate(-4, -4), border_radius=13)
+    marco = s
+    s = Lienzo(t.get_width() + 44, 30)   # el dibujo de adentro, después se pega con el margen
+
     if logica:   # lamparita
         dibujo.circle(s, (255, 236, 140), (17, 13), 7)
         dibujo.rect(s, (230, 230, 230), (14, 19, 7, 5), border_radius=2)
@@ -82,8 +89,9 @@ def cartelito_consigna(logica):
         dibujo.line(s, (255, 214, 102), (10, 22), (22, 9), 5)
         dibujo.polygon(s, (255, 236, 200), [(8, 25), (10, 19), (14, 23)])
     s.blit(t, (32, 15 - t.get_height() // 2))
-    _VELO[clave] = s
-    return s
+    marco.blit(s, (6, 6))
+    _VELO[clave] = marco
+    return marco
 
 
 def flecha_reiniciar(sup, centro, tam, color):
@@ -901,7 +909,7 @@ class Juego(Escena):
         else:
             self.cx, self.ancho = ANCHO // 2, 1100
         cx, ancho = self.cx, self.ancho
-        y = 108
+        y = 108 + (16 if self.tiempo else 0)   # con reloj, la barra de tiempo va arriba
         consigna = self.ej.consigna
         # solo lo que de verdad viene del cuaderno de errores lleva el cartel
         del_cuaderno = self.i in self.repasos or (self.practica and self.app.progreso.en_cuaderno(self.ej.clave))
@@ -930,11 +938,12 @@ class Juego(Escena):
             pregunta = f"**Paso {self.paso_i + 1} de {n_pasos}.** " + pregunta
         s = ui.rico(pregunta, 24, TINTA, ancho=ancho - 150, color_negrita=LAVANDA_OSC)
         insignia = cartelito_consigna(self.es_logica)
-        total = insignia.get_width() + 12 + s.get_width()
+        ancho_ins = insignia.get_width() - 12          # (la insignia trae 6 px de margen para su sombra)
+        total = ancho_ins + 12 + s.get_width()
         x_ins = cx - total // 2
-        self.capas.append((insignia, insignia.get_rect(topleft=(x_ins, y + 1))))
-        self.capas.append((s, s.get_rect(topleft=(x_ins + insignia.get_width() + 12, y))))
-        y += max(s.get_height(), insignia.get_height()) + 16
+        self.capas.append((insignia, insignia.get_rect(topleft=(x_ins - 6, y + 1 - 6))))
+        self.capas.append((s, s.get_rect(topleft=(x_ins + ancho_ins + 12, y))))
+        y += max(s.get_height(), 30) + 16
 
         respondiendo = self.estado == "pregunta"
         if self.paso.tipo == "expresion":
@@ -1376,22 +1385,22 @@ class Juego(Escena):
             c = (x0 + k * sep, 86)
             if k < len(self.resultados):
                 color = {"bien": ui.PASTO, "salteado": (186, 150, 236)}.get(self.resultados[k], CORAL)
-                dibujo.circle(sup, BORDE, c, 10)
-                dibujo.circle(sup, color, c, 8)
+                if not (pincel.HAY_SKIA and ui._pegar(sup, pincel.esfera(8, color), c[0] - 10, c[1] - 10)):
+                    dibujo.circle(sup, BORDE, c, 10)
+                    dibujo.circle(sup, color, c, 8)
             elif k == self.i:
-                rr = 10 + 2 * math.sin(self.t * 5)
-                dibujo.circle(sup, BORDE, c, rr + 2)
-                dibujo.circle(sup, SOL, c, rr)
+                rr = round((10 + 2 * math.sin(self.t * 5)) * 2) / 2
+                if not (pincel.HAY_SKIA and ui._pegar(sup, pincel.esfera(rr, SOL), c[0] - rr - 2, c[1] - rr - 2)):
+                    dibujo.circle(sup, BORDE, c, rr + 2)
+                    dibujo.circle(sup, SOL, c, rr)
             else:
                 dibujo.circle(sup, ARENA_OSC, c, 7)
                 dibujo.circle(sup, ARENA, c, 5)
         if self.tiempo:
             restante = max(0.0, 1 - min(self.t_paso, self.tiempo) / self.tiempo)
             rr = pygame.Rect(ANCHO // 2 - 220, 100, 440, 10)
-            dibujo.rect(sup, BORDE, rr.inflate(4, 4), border_radius=6)
-            dibujo.rect(sup, (240, 228, 204), rr, border_radius=5)
             col = ui.PASTO if restante > 0.5 else (SOL if restante > 0.25 else CORAL)
-            dibujo.rect(sup, col, (rr.left, rr.top, int(rr.width * restante), rr.height), border_radius=5)
+            ui.barra(sup, rr, restante, col, (240, 228, 204))
 
     def dibujar(self, sup):
         sup.blit(paisaje.pergamino(), (0, 0))

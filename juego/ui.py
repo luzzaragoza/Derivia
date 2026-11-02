@@ -771,13 +771,22 @@ class CampoTexto:
 
     def dibujar(self, sup):
         r = self.rect
-        dibujo.rect(sup, (255, 255, 255), r, border_radius=14)
-        dibujo.rect(sup, (236, 230, 218), (r.left + 4, r.top + 3, r.width - 8, 6), border_radius=3)
         borde = LAVANDA_OSC if self.habilitado else GRIS
-        if self.habilitado:
-            brillo = 0.5 + 0.5 * math.sin(self.t * 3)
-            dibujo.rect(sup, aclarar(LAVANDA, 0.3 + 0.3 * brillo), r.inflate(10, 10), 4, border_radius=18)
-        dibujo.rect(sup, borde, r, 3, border_radius=14)
+        fino = False
+        if pincel.HAY_SKIA:
+            if self.habilitado:
+                halo, mh = pincel.resplandor(r.width, r.height, LAVANDA)
+                if halo is not None:
+                    halo.set_alpha(int(150 + 105 * (0.5 + 0.5 * math.sin(self.t * 3))))
+                    sup.blit(halo, (r.x - mh, r.y - mh))
+            fino = _pegar(sup, pincel.campo(r.width, r.height, borde), r.x, r.y)
+        if not fino:
+            dibujo.rect(sup, (255, 255, 255), r, border_radius=14)
+            dibujo.rect(sup, (236, 230, 218), (r.left + 4, r.top + 3, r.width - 8, 6), border_radius=3)
+            if self.habilitado:
+                brillo = 0.5 + 0.5 * math.sin(self.t * 3)
+                dibujo.rect(sup, aclarar(LAVANDA, 0.3 + 0.3 * brillo), r.inflate(10, 10), 4, border_radius=18)
+            dibujo.rect(sup, borde, r, 3, border_radius=14)
         f = fuente(30, negrita=True) if self.fredoka else fuente(26, mono=True)
         interior = self.rect.inflate(-32, 0)
         ancho_cursor = f.size(self.texto[:self.cursor])[0]
@@ -930,15 +939,37 @@ class Interruptor:
         objetivo = 1.0 if self.valor else 0.0
         self.anim += (objetivo - self.anim) * 0.3
         r = self.rect
-        color = tuple(int(a + (b - a) * self.anim) for a, b in zip((214, 200, 180), PASTO))
-        dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
-        dibujo.rect(sup, color, r, border_radius=r.height)
+        k = round(self.anim * 10) / 10          # (en pasos, así se guardan pocas versiones)
+        color = tuple(int(a + (b - a) * k) for a, b in zip((214, 200, 180), PASTO))
         x = r.left + r.height / 2 + self.anim * (r.width - r.height)
-        dibujo.circle(sup, BORDE, (x, r.centery + 2), r.height / 2 + 1)
-        dibujo.circle(sup, TARJETA, (x, r.centery), r.height / 2 - 2)
+        if not (pincel.HAY_SKIA and _pegar(sup, pincel.pista(r.width, r.height, color), r.x, r.y)):
+            dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
+            dibujo.rect(sup, color, r, border_radius=r.height)
+        rr = int(r.height / 2 - 2)
+        if not (pincel.HAY_SKIA and _pegar(sup, pincel.esfera(rr, TARJETA), x - rr - 2, r.centery - rr - 2)):
+            dibujo.circle(sup, BORDE, (x, r.centery + 2), r.height / 2 + 1)
+            dibujo.circle(sup, TARJETA, (x, r.centery), r.height / 2 - 2)
         t = texto("SÍ" if self.valor else "NO", 14, BORDE, negrita=True)
         tx = r.left + 12 if self.valor else r.right - 12 - t.get_width()
         sup.blit(t, (tx, r.centery - t.get_height() // 2))
+
+
+def barra(sup, rect, valor, color, fondo):
+    """Barra hundida con una parte llena (volumen, tiempo que queda)."""
+    r = pygame.Rect(rect)
+    lleno = max(r.height, int(r.width * max(0.0, min(1.0, valor)) / 2) * 2)
+    if pincel.HAY_SKIA and _pegar(sup, pincel.pista(r.width, r.height, fondo), r.x, r.y):
+        if valor > 0:
+            pieza = pincel.relleno(lleno, r.height, color)
+            if pieza is not None:
+                sup.blit(pieza, (r.x, r.y))
+                return
+            dibujo.rect(sup, color, (r.left, r.top, lleno, r.height), border_radius=r.height)
+        return
+    dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
+    dibujo.rect(sup, fondo, r, border_radius=r.height)
+    if valor > 0:
+        dibujo.rect(sup, color, (r.left, r.top, lleno, r.height), border_radius=r.height)
 
 
 class Deslizador:
@@ -974,11 +1005,11 @@ class Deslizador:
 
     def dibujar(self, sup):
         r = self.rect
-        dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
-        dibujo.rect(sup, (236, 222, 196), r, border_radius=r.height)
-        lleno = pygame.Rect(r.left, r.top, max(r.height, int(r.width * self.valor)), r.height)
-        dibujo.rect(sup, MAR if self.habilitado else GRIS, lleno, border_radius=r.height)
+        barra(sup, r, self.valor, MAR if self.habilitado else GRIS, (236, 222, 196))
         x = r.left + r.width * self.valor
-        dibujo.circle(sup, BORDE, (x, r.centery + 2), r.height + 3)
-        dibujo.circle(sup, SOL if self.habilitado else GRIS, (x, r.centery), r.height + 1)
-        dibujo.circle(sup, aclarar(SOL, 0.6), (x - 3, r.centery - 3), 3)
+        rr = r.height + 1
+        if not (pincel.HAY_SKIA and _pegar(sup, pincel.esfera(rr, SOL if self.habilitado else GRIS), x - rr - 2,
+                                           r.centery - rr - 2)):
+            dibujo.circle(sup, BORDE, (x, r.centery + 2), r.height + 3)
+            dibujo.circle(sup, SOL if self.habilitado else GRIS, (x, r.centery), r.height + 1)
+            dibujo.circle(sup, aclarar(SOL, 0.6), (x - 3, r.centery - 3), 3)
