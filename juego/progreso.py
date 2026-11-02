@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from .ejercicios import MUNDOS
+from .mundos import MUNDOS
 
 REPASOS_PARA_SACAR = 2   # veces que hay que acertar un ejercicio del cuaderno
 

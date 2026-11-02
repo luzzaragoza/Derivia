@@ -80,8 +80,18 @@ class Formula:
         return self.sup.get_height() - self.abajo
 
 
+_INTEGRAL = re.compile(r"(\\i{1,3}nt(?:_\{(?:[^{}]|\{[^{}]*\})*\}|_[A-Za-z0-9])?"
+                       r"(?:\^\{(?:[^{}]|\{[^{}]*\})*\}|\^[A-Za-z0-9])?)\s+(?!\\i{1,3}nt)")
+
+
+def espaciar_integrales(tex):
+    """Un espacito entre el signo integral y lo que se integra."""
+    return _INTEGRAL.sub(lambda m: m.group(1) + r"\ ", tex)
+
+
 def formula(tex, tam=28, color=TINTA):
     """Dibuja LaTeX (sin $). tam ~ altura en píxeles de una letra grande."""
+    tex = espaciar_integrales(tex)
     clave = (tex, tam, color)
     if clave in _CACHE_MATE:
         return _CACHE_MATE[clave]
@@ -433,3 +443,80 @@ class CampoTexto:
             cx = interior.left + ancho_cursor - self.desplazamiento
             pygame.draw.line(sup, LAVANDA_OSC, (cx, self.rect.centery - 15), (cx, self.rect.centery + 15), 2)
         sup.set_clip(clip)
+
+
+# ------------------------------------------------------------ dibujo de regiones (integrales dobles)
+_CACHE_GRAF = {}
+
+
+def grafico(spec, tam=300):
+    """Dibuja la región de integración con matplotlib y la devuelve como superficie."""
+    clave = (tuple(sorted((k, str(v)) for k, v in spec.items())), tam)
+    if clave in _CACHE_GRAF:
+        return _CACHE_GRAF[clave]
+    import matplotlib.patches  # noqa: F401
+    import sympy as sp
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    from matplotlib.figure import Figure
+
+    from .mate import tex, x
+
+    relleno, borde, tinta = "#d9cdf7", "#7058c4", "#343048"
+    fig = Figure(figsize=(tam / 100, tam / 100), dpi=100)
+    fig.patch.set_alpha(0)
+    ax = fig.add_axes([0.15, 0.15, 0.79, 0.80])
+    tipo = spec["tipo"]
+    if tipo == "rect":
+        a, b, c, d = (float(spec[k]) for k in "abcd")
+        ax.add_patch(matplotlib.patches.Rectangle((a, c), b - a, d - c, facecolor=relleno, edgecolor=borde, lw=2))
+        m = 0.15 * max(b - a, d - c)
+        ax.set_xlim(min(0, a) - m, b + m)
+        ax.set_ylim(min(0, c) - m, d + m)
+    elif tipo == "I":
+        a, b = float(spec["a"]), float(spec["b"])
+        xs = np.linspace(a, b, 240)
+
+        def evaluar(g):
+            f = sp.lambdify(x, sp.sympify(g), "numpy")
+            return np.broadcast_to(np.asarray(f(xs), dtype=float), xs.shape)
+        y1, y2 = evaluar(spec["g1"]), evaluar(spec["g2"])
+        ax.fill_between(xs, y1, y2, color=relleno, zorder=1)
+        ax.plot(xs, y1, color="#26845c", lw=2.2, label=f"$y = {tex(spec['g1'])}$", zorder=2)
+        ax.plot(xs, y2, color="#c43e62", lw=2.2, label=f"$y = {tex(spec['g2'])}$", zorder=2)
+        for xv in (a, b):
+            ax.axvline(xv, color=borde, lw=1, ls="--", zorder=0)
+        lo, hi = min(y1.min(), y2.min(), 0), max(y1.max(), y2.max())
+        m = 0.15 * max(b - a, hi - lo, 1)
+        ax.set_xlim(min(a, 0) - m, b + m)
+        ax.set_ylim(lo - m, hi + m * 2.2)
+        ax.legend(loc="upper left", fontsize=10, frameon=False)
+    elif tipo == "polar":
+        r1, r2 = float(spec["r1"]), float(spec["r2"])
+        t1, t2 = float(spec["t1"]), float(spec["t2"])
+        ts = np.linspace(t1, t2, 240)
+        afuera = np.c_[r2 * np.cos(ts), r2 * np.sin(ts)]
+        adentro = np.c_[r1 * np.cos(ts[::-1]), r1 * np.sin(ts[::-1])] if r1 > 0 else np.array([[0.0, 0.0]])
+        ax.add_patch(matplotlib.patches.Polygon(np.r_[afuera, adentro], closed=True, facecolor=relleno,
+                                                edgecolor=borde, lw=2))
+        m = r2 * 1.25
+        ax.set_xlim(-m, m)
+        ax.set_ylim(-m, m)
+        ax.set_aspect("equal")
+    ax.axhline(0, color=tinta, lw=0.8, zorder=0)
+    ax.axvline(0, color=tinta, lw=0.8, zorder=0)
+    ax.grid(True, color="#ece6dc", lw=0.8, zorder=0)
+    for lado in ("top", "right"):
+        ax.spines[lado].set_visible(False)
+    ax.tick_params(labelsize=9, colors=tinta)
+    ax.set_xlabel("x", color=tinta, fontsize=11, labelpad=1)
+    ax.set_ylabel("y", color=tinta, fontsize=11, rotation=0, labelpad=8)
+    canvas = FigureCanvasAgg(fig)
+    canvas.draw()
+    w, h = canvas.get_width_height()
+    img = pygame.image.frombuffer(bytes(canvas.buffer_rgba()), (w, h), "RGBA").copy()
+    tarjeta = pygame.Surface((w + 16, h + 16), pygame.SRCALPHA)
+    pygame.draw.rect(tarjeta, (226, 220, 214), tarjeta.get_rect().move(0, 3), border_radius=16)
+    pygame.draw.rect(tarjeta, TARJETA, tarjeta.get_rect().inflate(0, -3).move(0, -1), border_radius=16)
+    tarjeta.blit(img, (8, 6))
+    _CACHE_GRAF[clave] = tarjeta
+    return tarjeta

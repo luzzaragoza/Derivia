@@ -1,8 +1,10 @@
 # Calculandia
 
-Un juego para aprender a derivar (y, en las próximas versiones, a integrar), de a un paso por vez.
+Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regla de la potencia hasta integrales triples en esféricas.
 
-## Versión 1: qué trae
+## Qué trae
+
+**49 niveles en 10 mundos**, de derivadas básicas a integrales triples:
 
 | Mundo | Tema | Niveles |
 |---|---|---|
@@ -10,6 +12,12 @@ Un juego para aprender a derivar (y, en las próximas versiones, a integrar), de
 | 2 | Producto y cociente | Producto · Producto paso a paso · Cociente · Cociente paso a paso · **Jefe** |
 | 3 | Regla de la cadena | Cadena · Cadena paso a paso · ln, raíz y trigonométricas · Cadena + producto · **Jefe: cadena doble** |
 | 3½ | ¿Qué regla va? | Contrarreloj: elegir la regla antes de derivar (con trampas como `5·sen(x)` o `sen²(x)`) |
+| 4 | Derivadas parciales | Respecto de x · Respecto de y · Las dos parciales · Parciales con cadena · **Jefe: derivada segunda** |
+| 5 | Integrales inmediatas | Potencias · Seno, coseno, e y 1/x · Sumas · Raíces y fracciones · Integral definida (Barrow) · **Jefe** |
+| 6 | Sustitución | Adentro lineal · Elegir la u · Paso a paso · Acomodar constantes · **Jefe** |
+| 7 | Integración por partes | ¿Quién es u? (LIATE) · Paso a paso · Con logaritmos · **Jefe** |
+| 8 | Integrales dobles | Rectángulos · Regiones tipo I · Cambio de orden · Polares · **Jefe** |
+| 9 | Integrales triples | Cajas · Límites variables · Cilíndricas · Esféricas · **Jefe final** |
 
 - **Mezcla de opciones y tipeo**: los primeros niveles de cada mundo son de elegir; después tipeás vos.
 - **Paso a paso**: en los niveles "paso a paso" primero identificás la regla o la función de adentro, después derivás cada parte y al final armás el resultado.
@@ -18,13 +26,15 @@ Un juego para aprender a derivar (y, en las próximas versiones, a integrar), de
 - **Pistas** que cuestan 5 puntos (en los jefes no hay).
 - **Cuaderno de errores**: todo ejercicio en el que te equivocás se guarda. Te vuelve a aparecer como repaso y sale cuando lo resolvés bien 2 veces.
 - **Ejercicios infinitos**: se generan con números al azar cada vez.
+- **Integrales**: se corrigen derivando tu respuesta, así que vale cualquier primitiva (con o sin `+ C`).
+- **Integrales dobles**: te muestra el dibujo de la región.
 - Abajo del cuadro de texto aparece **"Leo: …"** con cómo se entendió lo que escribiste.
 
 ## Cómo jugar en Windows
 
 ### Opción A: armar el `.exe` (recomendada)
 
-1. Instalá Python desde https://www.python.org/downloads/ (la versión 3.12 o 3.13).
+1. Instalá Python desde https://www.python.org/downloads/ (la 3.12 o una más nueva).
    En el instalador **marcá la casilla "Add python.exe to PATH"**.
 2. Descomprimí la carpeta `calculandia` donde quieras.
 3. Hacé doble clic en **`construir_exe.bat`**. Tarda unos minutos la primera vez.
@@ -51,6 +61,9 @@ Con Python instalado (paso 1 de arriba), hacé doble clic en **`jugar.bat`**.
 | raíz | `raiz(x)` |
 | fracción | `(x+1)/(x^2+1)` |
 | seno al cuadrado | `sen(x)^2` o `sen^2(x)` |
+| otras variables | `3x^2y + z` |
+| constante de integración | `x^3/3 + C` |
+| pi | `8pi/3` |
 
 No hace falta simplificar: si tu respuesta es la misma función escrita de otra forma, cuenta como bien.
 Si escribís algo que no se entiende, no perdés vidas.
@@ -63,7 +76,10 @@ En `%APPDATA%\Calculandia\progreso.json`. Si lo borrás, el juego arranca de cer
 
 ```
 juego/mate.py         el "profe": entiende lo tipeado, compara respuestas y detecta errores típicos
-juego/ejercicios.py   generadores de ejercicios y lista de mundos y niveles
+juego/ejercicios.py   estructuras de los pasos y generadores de derivadas (mundos 1 a 3½)
+juego/gen_integrales.py  derivadas parciales e integrales de una variable (mundos 4 a 7)
+juego/gen_multiples.py   integrales dobles y triples (mundos 8 y 9)
+juego/mundos.py       la lista de mundos y niveles
 juego/escenas.py      pantallas (menú, mapa, nivel, resultados, cuaderno, ayuda)
 juego/ui.py           dibujo: fórmulas, botones, cuadro de texto
 juego/progreso.py     guardado

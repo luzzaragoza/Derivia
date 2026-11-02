@@ -13,6 +13,10 @@ from sympy.parsing.sympy_parser import (
 )
 
 x = sp.Symbol("x")
+y = sp.Symbol("y")
+z = sp.Symbol("z")
+C = sp.Symbol("c")          # la constante de integración
+VARIABLES = {"x": x, "y": y, "z": z}
 
 _TRANSFORMACIONES = standard_transformations + (
     implicit_multiplication_application,
@@ -29,7 +33,6 @@ _GLOBALES = {
     "__builtins__": {},
 }
 _LOCALES = {
-    "x": x,
     "e": sp.E,
     "pi": sp.pi,
     "sin": sp.sin,
@@ -91,8 +94,11 @@ def normalizar(texto):
     return s
 
 
-def parsear(texto):
-    """Convierte lo que tipeó en una expresión de SymPy. Lanza ErrorEntrada."""
+def parsear(texto, variables=(x,), permitir_c=False):
+    """Convierte lo que tipeó en una expresión de SymPy. Lanza ErrorEntrada.
+
+    variables: las letras que pueden aparecer (x, y, z). Vacío = tiene que ser un número.
+    permitir_c: acepta la constante de integración C."""
     if not texto or not texto.strip():
         raise ErrorEntrada("Todavía no escribiste nada.")
     if len(texto) > 200:
@@ -106,7 +112,11 @@ def parsear(texto):
     # separar los nombres de función para que "xcos(x)" sea x·cos(x)
     s = re.sub(rf"({_FUNCIONES})", r" \1 ", s)
     try:
-        expr = parse_expr(s, local_dict=dict(_LOCALES), global_dict=dict(_GLOBALES),
+        locales = dict(_LOCALES)
+        locales.update({str(v): v for v in variables})
+        if permitir_c:
+            locales["c"] = C
+        expr = parse_expr(s, local_dict=locales, global_dict=dict(_GLOBALES),
                           transformations=_TRANSFORMACIONES)
     except Exception:
         raise ErrorEntrada("No entiendo la fórmula. ¿Falta algún paréntesis o un signo?")
@@ -117,9 +127,16 @@ def parsear(texto):
     if raras:
         nombre = sorted(str(f.func) for f in raras)[0]
         raise ErrorEntrada(f"No conozco la función «{nombre}».")
-    otras = sorted(str(s) for s in expr.free_symbols - {x})
+    permitidas = set(variables) | ({C} if permitir_c else set())
+    otras = sorted(str(s) for s in expr.free_symbols - permitidas)
     if otras:
-        raise ErrorEntrada(f"Usá solo la variable x (encontré: {', '.join(otras)}).")
+        if not variables:
+            raise ErrorEntrada("Acá va un número, sin letras (podés usar pi y e).")
+        if "u" in otras:
+            raise ErrorEntrada("Volvé a la variable de antes: reemplazá la u por lo que valía.")
+        nombres = " y ".join(str(v) for v in variables)
+        raise ErrorEntrada(f"Usá solo {'la variable' if len(variables) == 1 else 'las variables'} {nombres} "
+                           f"(encontré: {', '.join(otras)}).")
     if expr.has(sp.zoo, sp.nan, sp.oo):
         raise ErrorEntrada("Ahí hay una división por cero.")
     return expr
@@ -134,6 +151,8 @@ def tex(expr):
     s = s.replace(r"\left(", "(").replace(r"\right)", ")")
     s = s.replace(r"\left[", "[").replace(r"\right]", "]")
     s = s.replace(r"\operatorname", r"\mathrm")
+    # que "y ln(x)" no se lea "yln(x)": espacio fino antes de ln, sen, cos, tg
+    s = re.sub(r"(?<=[\w}])\s*(\\(?:ln|cos|log|mathrm\{sen\}|mathrm\{tg\}))", r"\\,\1", s)
     return s
 
 
@@ -158,12 +177,21 @@ def tex_base(expr):
 _PUNTOS = [0.37, 0.81, 1.23, 1.71, 2.29, 2.83, 3.41]
 
 
-def _valores(expr):
-    f = sp.lambdify(x, expr, modules="mpmath")
+def _variables(*exprs):
+    simbolos = set()
+    for e in exprs:
+        simbolos |= sp.sympify(e).free_symbols
+    return sorted(simbolos, key=str)
+
+
+def _valores(expr, variables=None):
+    variables = _variables(expr) if variables is None else variables
+    f = sp.lambdify(variables, expr, modules="mpmath")
     vals = []
-    for p in _PUNTOS:
+    for i in range(len(_PUNTOS)):
+        punto = [mpmath.mpf(_PUNTOS[(i + 3 * k) % len(_PUNTOS)] + 0.17 * k) for k in range(len(variables))]
         try:
-            v = mpmath.mpc(f(mpmath.mpf(p)))
+            v = mpmath.mpc(f(*punto))
             if mpmath.isnan(v.real) or mpmath.isinf(v.real) or mpmath.isnan(v.imag) or mpmath.isinf(v.imag):
                 v = None
         except Exception:
@@ -179,7 +207,8 @@ def _cerca(a, b):
 def equivalentes(a, b):
     """True si a y b son la misma función (aunque estén escritas distinto)."""
     a, b = sp.sympify(a), sp.sympify(b)
-    va, vb = _valores(a), _valores(b)
+    vs = _variables(a, b)
+    va, vb = _valores(a, vs), _valores(b, vs)
     validos = 0
     for p, q in zip(va, vb):
         if q is None:
@@ -197,7 +226,8 @@ def equivalentes(a, b):
 
 def _razon_constante(a, b):
     """Si a = k·b para un número k (≠1), devuelve k; si no, None."""
-    va, vb = _valores(a), _valores(b)
+    vs = _variables(a, b)
+    va, vb = _valores(a, vs), _valores(b, vs)
     k = None
     n = 0
     for p, q in zip(va, vb):
@@ -215,7 +245,10 @@ def _razon_constante(a, b):
 
 
 def _difiere_en_constante(a, b):
-    va, vb = _valores(a), _valores(b)
+    vs = _variables(a, b)
+    if not vs:
+        return False
+    va, vb = _valores(a, vs), _valores(b, vs)
     c = None
     n = 0
     for p, q in zip(va, vb):
@@ -335,3 +368,97 @@ def diagnosticar(respuesta, esperado, errores=(), original=None):
     if _difiere_en_constante(respuesta, esperado):
         return ("constante_de_mas",) + ERRORES["constante_de_mas"]
     return (None,) + _GENERICO
+
+
+# ------------------------------------------------------------ integrales
+
+ERRORES.update({
+    "integral_no_divide": ("Te faltó dividir por el nuevo exponente",
+                           "$\\int x^n\\,dx = \\dfrac{x^{n+1}}{n+1} + C$: se suma 1 al exponente **y** se divide por ese nuevo exponente."),
+    "integral_resto": ("Restaste 1 al exponente: eso es derivar",
+                       "Al **integrar** se **suma** 1 al exponente y se divide por el nuevo exponente."),
+    "integral_derivaste": ("Derivaste en vez de integrar",
+                           "Buscamos una función $F$ tal que $F' = f$. Lo que escribiste es la derivada de $f$, no una primitiva."),
+    "no_integraste": ("Eso es la misma función",
+                      "Escribiste la función que había que integrar. Buscá una $F$ que, al derivarla, dé eso."),
+    "integral_signo": ("Te quedó el signo cambiado",
+                       "Si derivás tu respuesta, da lo mismo pero con el signo al revés. Ojo: $\\int \\mathrm{sen}\\,x\\,dx = -\\cos x + C$ y $\\int \\cos x\\,dx = \\mathrm{sen}\\,x + C$."),
+    "integral_factor": ("Te sobra o te falta un número multiplicando",
+                        "Si derivás tu respuesta da casi lo mismo, pero multiplicado por un número. Revisá las divisiones (por el exponente nuevo o por la constante de adentro)."),
+    "integral_1_x": ("$\\int \\frac{1}{x}\\,dx$ es un caso especial",
+                     "Con $n=-1$ la regla de la potencia no anda (dividiría por 0): $\\int \\frac{1}{x}\\,dx = \\ln|x| + C$."),
+    "integral_exp_k": ("Ojo con la constante del exponente",
+                       "$\\int e^{kx}\\,dx = \\dfrac{e^{kx}}{k} + C$: se **divide** por $k$ (multiplicar es lo que pasa al derivar)."),
+    "constante_mal": ("La C va sumando sola",
+                      "La constante de integración se **suma** al final: $F(x) + C$. No multiplica a nada."),
+    "sust_constante": ("Te faltó acomodar la constante",
+                       "Cuando $du$ trae un número que no está en la integral (por ejemplo $du = 2x\\,dx$ y solo tenés $x\\,dx$), hay que dividir por ese número."),
+    "partes_signo": ("En partes va un menos",
+                     "$\\int u\\,dv = u\\,v - \\int v\\,du$: la integral que queda se **resta**."),
+    "partes_sin_integral": ("Te faltó la integral que queda",
+                            "Partes no termina en $u\\,v$: falta restar $\\int v\\,du$ (y resolverla)."),
+    "partes_v_derivada": ("$v$ se obtiene integrando $dv$",
+                          "En partes, $u$ se **deriva** y $dv$ se **integra**. Parece que a $dv$ lo derivaste."),
+    "partes_eleccion": ("Esa elección complica la integral",
+                        "Regla práctica (LIATE): para $u$ conviene, en este orden, **L**ogaritmos, **I**nversas, **A**lgebraicas (polinomios), **T**rigonométricas, **E**xponenciales. $dv$ es lo que queda, con el $dx$."),
+    "barrow_orden": ("Es $F(b) - F(a)$, no al revés",
+                     "Regla de Barrow: $\\int_a^b f(x)\\,dx = F(b) - F(a)$: primero el de **arriba**."),
+    # varias variables
+    "parcial_cambiada": ("Derivaste respecto de la otra variable",
+                         "Fijate el subíndice: $f'_x$ es derivar respecto de $x$, y $f'_y$, respecto de $y$."),
+    "parcial_no_constante": ("La otra variable es una constante",
+                             "En una derivada parcial, la otra letra se trata **como un número fijo**. Por ejemplo, en $f'_x$ la $y$ es como si fuera un 5."),
+    "parcial_termino_cero": ("Ese término es constante",
+                             "Un término que no tiene la variable respecto de la que derivás es una constante: su derivada parcial es **0**."),
+    "parcial_perdio_factor": ("Se te perdió la otra variable",
+                              "La otra letra que multiplica **queda multiplicando**, igual que un número: $(3x^2 y)'_x = 6x\\,y$."),
+    "jacobiano_polar": ("Falta la $r$ del jacobiano",
+                        "En polares, $dx\\,dy$ se cambia por $r\\,dr\\,d\\theta$. ¡La $r$ es lo que más se olvida!"),
+    "jacobiano_cilindricas": ("Falta la $r$ del jacobiano",
+                              "En cilíndricas, $dx\\,dy\\,dz = r\\,dz\\,dr\\,d\\theta$."),
+    "jacobiano_esfericas": ("El jacobiano de esféricas es $\\rho^2\\,\\mathrm{sen}\\,\\varphi$",
+                            "En esféricas, $dx\\,dy\\,dz = \\rho^2\\,\\mathrm{sen}\\,\\varphi\\;d\\rho\\,d\\varphi\\,d\\theta$."),
+    "limites_al_reves": ("Los límites están al revés",
+                         "Abajo va la curva de **abajo** (o de la izquierda) y arriba la de **arriba** (o de la derecha)."),
+    "limites_mal": ("Esos límites no describen la región",
+                    "Mirá el dibujo: la variable de adentro va de una curva a la otra, y la de afuera, entre números fijos."),
+    "numero_aprox": ("¡Casi!",
+                     "Tu número está muy cerca. Revisá redondeos o dejalo exacto (con fracciones y $\\pi$)."),
+})
+
+
+def es_primitiva(resp, integrando, var=x):
+    d = sp.diff(resp, var)
+    return not d.has(C) and equivalentes(d, integrando)
+
+
+def diagnosticar_primitiva(resp, integrando, var=x, errores=()):
+    """Como diagnosticar() pero para integrales indefinidas (se compara derivando)."""
+    d = sp.diff(resp, var)
+    if d.has(C):
+        return ("constante_mal",) + ERRORES["constante_mal"]
+    r0 = resp.subs(C, 0)
+    for expr, codigo in errores:
+        try:
+            if equivalentes(d, sp.diff(expr, var)):
+                return (codigo,) + ERRORES[codigo]
+        except Exception:
+            pass
+    if equivalentes(r0, sp.diff(integrando, var)):
+        return ("integral_derivaste",) + ERRORES["integral_derivaste"]
+    if equivalentes(r0, integrando):
+        return ("no_integraste",) + ERRORES["no_integraste"]
+    if equivalentes(d, -integrando):
+        return ("integral_signo",) + ERRORES["integral_signo"]
+    if _razon_constante(d, integrando) is not None:
+        return ("integral_factor",) + ERRORES["integral_factor"]
+    return (None,) + _GENERICO
+
+
+def casi_igual(a, b, tol=5e-3):
+    """Para respuestas numéricas tipeadas con decimales."""
+    try:
+        va, vb = complex(sp.N(a)), complex(sp.N(b))
+    except Exception:
+        return False
+    return abs(va - vb) <= tol * (1 + abs(vb))

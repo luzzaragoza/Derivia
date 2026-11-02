@@ -6,8 +6,12 @@ import random
 import pygame
 
 from . import ui
-from .ejercicios import MUNDOS, generar, generar_nivel, mundo_por_id
-from .mate import ERRORES, ErrorEntrada, diagnosticar, equivalentes, parsear, tex
+from .mundos import MUNDOS, generar, generar_nivel, mundo_por_id
+from .mate import (C, ERRORES, ErrorEntrada, casi_igual, diagnosticar, diagnosticar_primitiva, equivalentes,
+                   es_primitiva, parsear, tex)
+from .mate import x as VAR_X
+from .mate import y as VAR_Y
+from .mate import z as VAR_Z
 from .ui import (ALTO, AMARILLO, AMARILLO_OSC, ANCHO, CELESTE, DURAZNO, DURAZNO_OSC, FONDO, FONDO_2, GRIS,
                  LAVANDA, LAVANDA_OSC, MENTA, MENTA_OSC, ROSA, ROSA_OSC, SUAVE, TARJETA, TINTA, Boton,
                  CampoTexto)
@@ -109,7 +113,7 @@ class Menu(Escena):
         sombra = ui.texto("Calculandia", 92, LAVANDA, negrita=True)
         centrar(sup, sombra, 108 + 5, ANCHO // 2 + 4)
         centrar(sup, titulo, 108)
-        centrar(sup, ui.texto("Derivadas (y pronto integrales), nivel por nivel", 24, SUAVE), 228)
+        centrar(sup, ui.texto("Derivadas e integrales, nivel por nivel", 24, SUAVE), 228)
         self.dibujar_botones(sup)
 
 
@@ -143,46 +147,48 @@ class Mapa(Escena):
 
     def _tarjeta_mundo(self, m, w, h, abierto):
         s = pygame.Surface((w, h), pygame.SRCALPHA)
-        s.blit(ui.texto(m.nombre, 18, SUAVE if abierto else GRIS, negrita=True), (4, 8))
-        s.blit(ui.texto(m.tema, 25, TINTA if abierto else SUAVE, negrita=True), (4, 32))
+        s.blit(ui.texto(m.nombre, 13, SUAVE if abierto else GRIS, negrita=True), (2, 1))
+        s.blit(ui.texto(m.tema, 18, TINTA if abierto else SUAVE, negrita=True), (2, 17))
         tengo, total = self.app.progreso.estrellas_mundo(m.id)
-        ui.estrella(s, (16, 82), 11, AMARILLO if tengo else GRIS, AMARILLO_OSC if tengo else None)
-        s.blit(ui.texto(f"{tengo} / {total}", 19, SUAVE), (34, 71))
-        if not abierto:
-            ui.candado(s, (w - 14, 20), 20)
+        if abierto:
+            t = ui.texto(f"{tengo}/{total}", 15, SUAVE, negrita=True)
+            s.blit(t, t.get_rect(midright=(w - 2, h // 2)))
+            ui.estrella(s, (w - t.get_width() - 16, h // 2), 9, AMARILLO if tengo else GRIS,
+                        AMARILLO_OSC if tengo else None)
+        else:
+            ui.candado(s, (w - 14, h // 2), 18)
         return s
 
     def _fila_nivel(self, m, i, nivel, w, h, abierto):
         p = self.app.progreso
         s = pygame.Surface((w, h), pygame.SRCALPHA)
         color_num = ui.oscurecer(m.color, 0.75) if abierto else GRIS
-        pygame.draw.circle(s, color_num, (30, h // 2), 26)
+        pygame.draw.circle(s, color_num, (28, h // 2), 24)
         num = "J" if nivel.jefe else str(i + 1)
-        n = ui.texto(num, 24, TARJETA, negrita=True)
-        s.blit(n, n.get_rect(center=(30, h // 2)))
-        s.blit(ui.texto(nivel.nombre, 24, TINTA if abierto else SUAVE, negrita=True), (74, 12))
-        s.blit(ui.rico(nivel.descripcion, 18, SUAVE, ancho=w - 330), (74, 46))
-        # etiquetas
-        etiquetas = []
-        etiquetas.append(("Opciones" if nivel.modo == "opciones" else "Tipeo", (255, 255, 255)))
+        n = ui.texto(num, 22, TARJETA, negrita=True)
+        s.blit(n, n.get_rect(center=(28, h // 2)))
+        s.blit(ui.texto(nivel.nombre, 22, TINTA if abierto else SUAVE, negrita=True), (68, 8))
+        desc = ui.escalar_a(ui.rico(nivel.descripcion, 17, SUAVE, ancho=w - 300), w - 300)
+        s.blit(desc, (68, 40))
+        etiquetas = [("Opciones" if nivel.modo == "opciones" else "Tipeo", (255, 255, 255))]
         if nivel.tiempo:
             etiquetas.append((f"{int(nivel.tiempo)} s", (255, 255, 255)))
         if nivel.jefe:
             etiquetas.append(("JEFE", ROSA))
-        x = w - 330
+        x = w - 220
         for txt, col in etiquetas:
-            t = ui.texto(txt, 15, TINTA, negrita=True)
-            r = pygame.Rect(x, 16, t.get_width() + 18, 26)
-            pygame.draw.rect(s, col, r, border_radius=13)
+            t = ui.texto(txt, 14, TINTA, negrita=True)
+            r = pygame.Rect(x, 8, t.get_width() + 16, 24)
+            pygame.draw.rect(s, col, r, border_radius=12)
             s.blit(t, t.get_rect(center=r.center))
-            x += r.width + 8
+            x += r.width + 6
         if abierto:
             est = p.estrellas(m.id, i)
             for k in range(3):
-                ui.estrella(s, (w - 96 + k * 34, h // 2 + 2), 14, AMARILLO if k < est else (238, 234, 240),
+                ui.estrella(s, (w - 88 + k * 32, h // 2 + 10), 13, AMARILLO if k < est else (238, 234, 240),
                             AMARILLO_OSC if k < est else GRIS)
         else:
-            ui.candado(s, (w - 60, h // 2), 26)
+            ui.candado(s, (w - 56, h // 2 + 6), 24)
         return s
 
     def armar(self):
@@ -190,37 +196,37 @@ class Mapa(Escena):
         self.botones = []
         for k, m in enumerate(MUNDOS):
             abierto = p.mundo_desbloqueado(m.id)
-            rect = pygame.Rect(40, 96 + k * 126, 330, 108)
-            b = Boton(rect, self._tarjeta_mundo(m, rect.width - 30, rect.height - 10, abierto),
+            rect = pygame.Rect(30, 84 + k * 58, 340, 52)
+            b = Boton(rect, self._tarjeta_mundo(m, rect.width - 28, rect.height - 6, abierto),
                       (lambda mid=m.id: self.elegir_mundo(mid)), m.color if abierto else (236, 232, 238),
-                      habilitado=abierto)
+                      habilitado=abierto, radio=14)
             b.mundo = m.id
             self.botones.append(b)
         m = mundo_por_id(self.sel)
         for i, nivel in enumerate(m.niveles):
             abierto = p.desbloqueado(m.id, i)
-            rect = pygame.Rect(400, 96 + i * 112, 840, 100)
-            b = Boton(rect, self._fila_nivel(m, i, nivel, rect.width - 26, rect.height - 8, abierto),
+            rect = pygame.Rect(400, 84 + i * 96, 850, 88)
+            b = Boton(rect, self._fila_nivel(m, i, nivel, rect.width - 24, rect.height - 6, abierto),
                       (lambda i=i: self.jugar(m.id, i)), TARJETA, habilitado=abierto)
             self.botones.append(b)
-        self.botones.append(Boton((40, 640, 130, 50), "← Menú", self.atras, FONDO_2, tam=19))
+        self.botones.append(Boton((ANCHO - 384, 18, 130, 44), "← Menú", self.atras, FONDO_2, tam=18))
         txt = "Volver a bloquear" if p.todo_desbloqueado else "Desbloquear todo"
-        self.botones.append(Boton((182, 640, 188, 50), txt, self.alternar_todo, FONDO_2, tam=16))
+        self.botones.append(Boton((ANCHO - 240, 18, 210, 44), txt, self.alternar_todo, FONDO_2, tam=16))
 
     def dibujar(self, sup):
         fondo(sup)
-        sup.blit(ui.texto("Elegí un nivel", 34, TINTA, negrita=True), (40, 30))
+        sup.blit(ui.texto("Elegí un nivel", 30, TINTA, negrita=True), (30, 22))
         m = mundo_por_id(self.sel)
-        sup.blit(ui.texto(f"{m.nombre}: {m.tema}", 22, SUAVE), (402, 42))
+        sup.blit(ui.texto(f"{m.nombre}: {m.tema}", 21, SUAVE), (402, 34))
         for b in self.botones:
             if getattr(b, "mundo", None) == self.sel:
-                pygame.draw.rect(sup, ui.oscurecer(m.color, 0.65), b.rect.inflate(10, 10), 4, border_radius=20)
+                pygame.draw.rect(sup, ui.oscurecer(m.color, 0.6), b.rect.inflate(8, 8), 3, border_radius=18)
         self.dibujar_botones(sup)
 
 
 # =============================================================== JUEGO
 
-TECLADO = [("x²", "^2", 0), ("^", "^", 0), ("( )", "()", 1), ("sen", "sen()", 1), ("cos", "cos()", 1),
+TECLADO = [("x²", "^2", 0), ("^", "^", 0), ("()", "()", 1), ("sen", "sen()", 1), ("cos", "cos()", 1),
            ("e^", "e^()", 1), ("ln", "ln()", 1), ("√", "raiz()", 1), ("/", "/", 0), ("·", "*", 0)]
 
 
@@ -335,27 +341,49 @@ class Juego(Escena):
                 return f"${o.tex}$" if o.tex else f"**{o.texto}**"
         return ""
 
+    def _teclado(self):
+        teclas = list(TECLADO)
+        extra = []
+        if VAR_Y in self.paso.variables:
+            extra.append(("y", "y", 0))
+        if VAR_Z in self.paso.variables:
+            extra.append(("z", "z", 0))
+        if self.paso.chequeo == "primitiva":
+            extra.append(("+C", "+C", 0))
+        if self.paso.chequeo == "numero":
+            extra = [("π", "pi", 0), ("e", "e", 0)]
+            teclas = [t for t in teclas if t[0] not in ("sen", "cos", "e^", "ln")]
+        return teclas + extra
+
     def armar(self):
         """Calcula la ubicación de todo según el estado actual."""
         self.botones = [Boton((14, 12, 112, 40), "← Salir", self.atras, ui.aclarar(self.color, 0.5), tam=17)]
         self.capas = []
+        if self.ej.grafico:
+            # a la derecha va el dibujo de la región; el resto se corre a la izquierda
+            self.cx, self.ancho = 480, 860
+            g = ui.grafico(self.ej.grafico)
+            self.capas.append((g, g.get_rect(topright=(ANCHO - 24, 104))))
+        else:
+            self.cx, self.ancho = ANCHO // 2, 1100
+        cx, ancho = self.cx, self.ancho
         y = 104
         consigna = self.ej.consigna
         if self.i in self.repasos or self.practica:
             consigna = "**Repaso del cuaderno** · " + consigna
-        s = ui.rico(consigna, 20, SUAVE)
-        self.capas.append((s, s.get_rect(midtop=(ANCHO // 2, y))))
+        s = ui.rico(consigna, 20, SUAVE, ancho=ancho)
+        self.capas.append((s, s.get_rect(midtop=(cx, y))))
         y += s.get_height() + 4
         f = ui.formula(self.ej.formula, 44)
-        s = ui.escalar_a(f.sup, 1100)
-        self.capas.append((s, s.get_rect(midtop=(ANCHO // 2, y))))
+        s = ui.escalar_a(f.sup, ancho)
+        self.capas.append((s, s.get_rect(midtop=(cx, y))))
         y += s.get_height() + 14
         # pasos ya hechos
         for k in range(self.paso_i):
             p = self.ej.pasos[k]
             mal = k in self.pasos_revelados
-            s = ui.rico(p.resumen, 20, ROSA_OSC if mal else MENTA_OSC, ancho=1000)
-            r = s.get_rect(midtop=(ANCHO // 2 + 16, y))
+            s = ui.escalar_a(ui.rico(p.resumen, 20, ROSA_OSC if mal else MENTA_OSC, ancho=ancho - 100), ancho - 60)
+            r = s.get_rect(midtop=(cx + 16, y))
             self.capas.append((s, r))
             self.capas.append(("cruz" if mal else "tilde", (r.left - 20, r.centery)))
             y += s.get_height() + 6
@@ -366,37 +394,41 @@ class Juego(Escena):
         pregunta = self.paso.pregunta
         if n_pasos > 1:
             pregunta = f"**Paso {self.paso_i + 1} de {n_pasos}.** " + pregunta
-        s = ui.rico(pregunta, 24, TINTA, ancho=1100, color_negrita=LAVANDA_OSC)
-        self.capas.append((s, s.get_rect(midtop=(ANCHO // 2, y))))
+        s = ui.rico(pregunta, 24, TINTA, ancho=ancho, color_negrita=LAVANDA_OSC)
+        self.capas.append((s, s.get_rect(midtop=(cx, y))))
         y += s.get_height() + 16
 
         respondiendo = self.estado == "pregunta"
         if self.paso.tipo == "expresion":
-            pre = ui.formula(self.paso.prefijo, 30) if self.paso.prefijo else None
-            pw = pre.sup.get_width() + 14 if pre else 0
-            x0 = (ANCHO - (pw + 560)) // 2
+            pre = ui.escalar_a(ui.formula(ui.fracciones_grandes(self.paso.prefijo), 30).sup, 380) \
+                if self.paso.prefijo else None
+            ancho_campo = min(560, ancho - 40 - (pre.get_width() + 14 if pre else 0))
+            pw = pre.get_width() + 14 if pre else 0
+            x0 = cx - (pw + ancho_campo) // 2
+            alto_campo = max(58, pre.get_height() + 6) if pre else 58
             if pre:
-                self.capas.append((pre.sup, pre.sup.get_rect(midleft=(x0, y + 29))))
-            self.campo.rect = pygame.Rect(x0 + pw, y, 560, 58)
+                self.capas.append((pre, pre.get_rect(midleft=(x0, y + alto_campo // 2))))
+            self.campo.rect = pygame.Rect(x0 + pw, y + (alto_campo - 58) // 2, ancho_campo, 58)
             self.campo.habilitado = respondiendo
-            y += 66
+            y += alto_campo + 8
             self.y_preview = y
             y += 44
             if respondiendo:
-                anchos = [max(54, ui.texto(et, 18, TINTA, negrita=True).get_width() + 26) for et, _, _ in TECLADO]
-                total = sum(anchos) + 8 * (len(anchos) - 1)
-                x = (ANCHO - total) // 2
-                for (et, ins, ret), w in zip(TECLADO, anchos):
+                teclas = self._teclado()
+                anchos = [max(46, ui.texto(et, 18, TINTA, negrita=True).get_width() + 22) for et, _, _ in teclas]
+                total = sum(anchos) + 7 * (len(anchos) - 1)
+                x = cx - total // 2
+                for (et, ins, ret), w in zip(teclas, anchos):
                     self.botones.append(Boton((x, y, w, 38), et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
                                               FONDO_2, tam=18, radio=10))
-                    x += w + 8
+                    x += w + 7
                 y += 50
                 fila = []
                 if self.paso.pistas and not self.jefe and self.pistas_vistas < len(self.paso.pistas):
                     fila.append(("Pista (−5)", self.pista, AMARILLO))
                 fila.append(("Comprobar  ↵", self.comprobar, LAVANDA))
                 total = len(fila) * 230 + (len(fila) - 1) * 16
-                x = (ANCHO - total) // 2
+                x = cx - total // 2
                 for txt, acc, col in fila:
                     self.botones.append(Boton((x, y, 230, 50), txt, acc, col, tam=20))
                     x += 246
@@ -406,8 +438,8 @@ class Juego(Escena):
             con_texto = any(o.texto for o in ops)
             alto = 62 if con_texto else 84
             cols = 2
-            w = 540
-            x0 = (ANCHO - (cols * w + 18)) // 2
+            w = min(540, (ancho - 18) // 2)
+            x0 = cx - (cols * w + 18) // 2
             for k, o in enumerate(ops):
                 fila, col = divmod(k, cols)
                 rect = (x0 + col * (w + 18), y + fila * (alto + 14), w, alto)
@@ -419,7 +451,7 @@ class Juego(Escena):
                 self.botones.append(b)
             y += ((len(ops) + 1) // 2) * (alto + 14)
             if respondiendo and self.paso.pistas and not self.jefe and self.pistas_vistas < len(self.paso.pistas):
-                self.botones.append(Boton((ANCHO // 2 - 115, y, 230, 46), "Pista (−5)", self.pista, AMARILLO, tam=19))
+                self.botones.append(Boton((cx - 115, y, 230, 46), "Pista (−5)", self.pista, AMARILLO, tam=19))
                 y += 54
         # panel de feedback o de pistas
         self.panel = None
@@ -467,7 +499,7 @@ class Juego(Escena):
             self.preview = None
             return
         try:
-            self.preview = ("ok", tex(parsear(texto)))
+            self.preview = ("ok", tex(self._parsear(texto)))
         except ErrorEntrada as ex:
             self.preview = ("err", str(ex))
         except Exception:
@@ -485,20 +517,36 @@ class Juego(Escena):
                 self.feedback = None
             self.armar()
 
+    def _parsear(self, texto):
+        return parsear(texto, self.paso.variables, permitir_c=self.paso.chequeo == "primitiva")
+
     def comprobar(self):
         if self.estado != "pregunta" or self.paso.tipo != "expresion":
             return
         try:
-            r = parsear(self.campo.texto)
+            r = self._parsear(self.campo.texto)
         except ErrorEntrada as ex:
             self.feedback = dict(tipo="info", titulo="No entiendo lo que escribiste",
                                  cuerpo=f"{ex} (Esto no te saca vidas. En el menú está la ayuda para escribir fórmulas.)")
             self.armar()
             return
-        if equivalentes(r, self.paso.esperado):
+        p = self.paso
+        if p.chequeo == "primitiva":
+            if es_primitiva(r, p.integrando, p.var or p.variables[0]):
+                nota = ""
+                if not r.has(C) and p.prefijo.startswith("\\int"):
+                    nota = "Ojo: en el parcial no te olvides del $+\\,C$."
+                self.acierto(nota)
+            else:
+                _, titulo, cuerpo = diagnosticar_primitiva(r, p.integrando, p.var or p.variables[0], p.errores)
+                self.fallo(titulo, cuerpo)
+            return
+        if equivalentes(r, p.esperado):
             self.acierto()
+        elif p.chequeo == "numero" and casi_igual(r, p.esperado):
+            self.acierto(f"Está bien, pero en el parcial dejalo exacto: ${tex(p.esperado)}$.")
         else:
-            _, titulo, cuerpo = diagnosticar(r, self.paso.esperado, self.paso.errores, self.paso.original)
+            _, titulo, cuerpo = diagnosticar(r, p.esperado, p.errores, p.original)
             self.fallo(titulo, cuerpo)
 
     def elegir(self, k):
@@ -514,11 +562,11 @@ class Juego(Escena):
             self.fallo(titulo, cuerpo)
 
     def _festejo(self):
-        cx = ANCHO // 2
+        cx = self.cx
         cy = self.campo.rect.centery if self.paso.tipo == "expresion" else 420
         self.particulas += [Particula(cx + random.uniform(-200, 200), cy) for _ in range(28)]
 
-    def acierto(self):
+    def acierto(self, nota=""):
         self.racha += 1
         pts = 10 + 2 * min(self.racha - 1, 5)
         if self.tiempo:
@@ -528,8 +576,10 @@ class Juego(Escena):
         cuerpo = self.paso.explicacion
         if self.paso.tipo == "expresion" and self.paso.mostrar:
             cuerpo = f"${self.paso.prefijo} {self.paso.mostrar}$\n{cuerpo}"
+        if nota:
+            cuerpo = f"**{nota}**\n{cuerpo}" if cuerpo else f"**{nota}**"
         self.feedback = dict(tipo="bien", titulo=f"{random.choice(FRASES_BIEN)}   +{pts}", cuerpo=cuerpo)
-        if not self.paso.explicacion or self.tiempo:
+        if (not self.paso.explicacion and not nota) or self.tiempo:
             self.auto_t = 0.9 if not self.tiempo else 1.6
         for k, o in enumerate(self.paso.opciones):
             if o.correcta:
@@ -707,12 +757,12 @@ class Juego(Escena):
                     et = ui.texto("Leo:", 18, SUAVE)
                     fm = ui.escalar_a(ui.formula(self.preview[1], 26, LAVANDA_OSC).sup, 900)
                     w = et.get_width() + 12 + fm.get_width()
-                    x = ANCHO // 2 - w // 2
+                    x = self.cx - w // 2
                     cy = self.y_preview + 18
                     sup.blit(et, (x, cy - et.get_height() // 2))
                     sup.blit(fm, (x + et.get_width() + 12, cy - fm.get_height() // 2))
                 else:
-                    centrar(sup, ui.texto(self.preview[1], 18, SUAVE), self.y_preview + 6)
+                    centrar(sup, ui.texto(self.preview[1], 18, SUAVE), self.y_preview + 6, self.cx)
         if self.panel:
             p = self.panel
             ui.caja(sup, p["rect"], p["color"], radio=16, sombra=False, borde=p["borde"], grosor=2)
@@ -883,12 +933,15 @@ class Ayuda(Escena):
         ("Fracción", "(x+1)/(x^2+1)", ["(x+1)/(x^2+1)"]),
         ("Seno al cuadrado", "sen(x)^2", ["sen(x)^2"]),
         ("Decimales", "0,5x", ["0,5x"]),
+        ("Otras variables", "3x^2y + z", ["3x^2y+z"]),
+        ("Constante de integración", "x^3/3 + C", ["x^3/3+C"]),
+        ("Pi", "8pi/3", ["8pi/3"]),
     ]
 
     def __init__(self, app):
         super().__init__(app)
         self.botones = [Boton((40, 650, 170, 50), "← Menú", self.atras, FONDO_2, tam=20)]
-        self.filas = [(nombre, ejemplo, r"\quad ".join(tex(parsear(m)) for m in muestras))
+        self.filas = [(nombre, ejemplo, r"\quad ".join(tex(parsear(m, (VAR_X, VAR_Y, VAR_Z), True)) for m in muestras))
                       for nombre, ejemplo, muestras in self.FILAS]
 
     def atras(self):
@@ -903,19 +956,20 @@ class Ayuda(Escena):
             sup.blit(ui.texto(et, 18, SUAVE, negrita=True), (x, y))
         y += 32
         for nombre, ejemplo, vista in self.filas:
-            r = pygame.Rect(40, y, 760, 42)
+            r = pygame.Rect(40, y, 760, 36)
             ui.caja(sup, r, TARJETA, radio=12, sombra=False)
-            sup.blit(ui.texto(nombre, 19, TINTA), (x1, y + 10))
-            sup.blit(ui.texto(ejemplo, 19, LAVANDA_OSC, mono=True, negrita=True), (x2, y + 10))
+            sup.blit(ui.texto(nombre, 18, TINTA), (x1, y + 8))
+            sup.blit(ui.texto(ejemplo, 18, LAVANDA_OSC, mono=True, negrita=True), (x2, y + 8))
             if vista:
-                f = ui.formula(vista, 24)
-                sup.blit(f.sup, f.sup.get_rect(midleft=(x3, y + 21)))
-            y += 48
+                f = ui.escalar_a(ui.formula(vista, 22).sup, 230)
+                sup.blit(f, f.get_rect(midleft=(x3, y + 18)))
+            y += 40
         consejos = ("**Consejos**\n"
                     "• Usá paréntesis: **e^2x** se lee como $e^2\\cdot x$. Para $e^{2x}$ escribí **e^(2x)**.\n"
                     "• Debajo del cuadro vas a ver «Leo: …» con cómo entendí lo que escribiste. Si no es lo que querías, agregá paréntesis.\n"
                     "• No hace falta simplificar: si es la misma función escrita distinto, está bien.\n"
                     "• Si tu teclado escribe â cuando apretás ^, no pasa nada: lo entiendo igual. También tenés los botones de abajo del cuadro.\n"
+                    "• En las integrales podés poner **+ C** o no: se corrige derivando tu respuesta.\n"
                     "• Equivocarte al tipear (algo que no se entiende) **no** te saca vidas.")
         caja = pygame.Rect(830, 124, 410, 520)
         ui.caja(sup, caja, (240, 234, 252), radio=18, sombra=False)

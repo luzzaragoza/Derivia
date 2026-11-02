@@ -3,7 +3,6 @@
 Cada ejercicio se arma con números al azar a partir de una semilla, así se
 puede volver a generar idéntico (para el cuaderno de errores)."""
 
-import random
 from dataclasses import dataclass, field
 
 import sympy as sp
@@ -42,6 +41,10 @@ class Paso:
     resumen: str = ""                       # renglón en la lista de pasos hechos
     max_intentos: int = 2
     mostrar: str = ""                       # la respuesta como en el pizarrón (LaTeX)
+    chequeo: str = "igual"                  # "igual" | "primitiva" | "numero"
+    var: object = None                      # variable respecto de la que se deriva/integra
+    variables: tuple = (x,)                 # letras que se pueden tipear
+    integrando: object = None               # para chequeo "primitiva"
 
 
 @dataclass
@@ -50,6 +53,7 @@ class Ejercicio:
     formula: str             # LaTeX grande del enunciado
     pasos: list
     clave: dict = field(default_factory=dict)
+    grafico: dict | None = None   # dibujo de la región (integrales dobles)
 
 
 class Ctx:
@@ -80,14 +84,14 @@ def _num_tex(a):
     return tex(a)
 
 
-def _distintos(esperado, candidatos, cuantos):
+def _distintos(esperado, candidatos, cuantos, iguales=equivalentes):
     """Filtra candidatos que sean distintos entre sí y del correcto."""
     elegidos = []
     for expr, codigo in candidatos:
         expr = sp.sympify(expr)
-        if equivalentes(expr, esperado):
+        if iguales(expr, esperado):
             continue
-        if any(equivalentes(expr, e) for e, _ in elegidos):
+        if any(iguales(expr, e) for e, _ in elegidos):
             continue
         elegidos.append((expr, codigo))
         if len(elegidos) == cuantos:
@@ -101,7 +105,8 @@ def errores_validos(esperado, candidatos):
 
 
 def paso_derivada(ctx, pregunta, prefijo, esperado, errores, pistas, explicacion,
-                  original=None, resumen_prefijo=None, forzar_tipeo=False, mostrar=None):
+                  original=None, resumen_prefijo=None, forzar_tipeo=False, mostrar=None,
+                  var=x, variables=(x,)):
     """Paso cuya respuesta es una expresión: se tipea o se elige según el modo.
     `mostrar` es la respuesta escrita como en el pizarrón (sin que SymPy la reordene)."""
     errores = errores_validos(esperado, errores)
@@ -114,10 +119,74 @@ def paso_derivada(ctx, pregunta, prefijo, esperado, errores, pistas, explicacion
         ops += [Opcion(tex=tex(e), error=c) for e, c in malos]
         ctx.rng.shuffle(ops)
         return Paso(pregunta=pregunta, tipo="opcion", opciones=ops, esperado=esperado,
-                    prefijo=prefijo, pistas=pistas, explicacion=explicacion, resumen=resumen)
+                    prefijo=prefijo, pistas=pistas, explicacion=explicacion, resumen=resumen,
+                    original=original, var=var, variables=variables)
     return Paso(pregunta=pregunta, tipo="expresion", esperado=esperado, errores=errores,
                 original=original, prefijo=prefijo, pistas=pistas,
-                explicacion=explicacion, resumen=resumen, mostrar=mostrar or "")
+                explicacion=explicacion, resumen=resumen, mostrar=mostrar or "",
+                var=var, variables=variables)
+
+
+def _misma_primitiva(var):
+    def iguales(a, b):
+        return equivalentes(sp.diff(a, var), sp.diff(b, var))
+    return iguales
+
+
+def paso_primitiva(ctx, pregunta, prefijo, primitiva, integrando, errores, pistas, explicacion,
+                   var=x, variables=(x,), mostrar=None, forzar_tipeo=False):
+    """Integral indefinida: se acepta cualquier F con F' = integrando (con o sin + C)."""
+    iguales = _misma_primitiva(var)
+    errores = [(sp.sympify(e), c) for e, c in errores if not iguales(e, primitiva)]
+    resumen = f"${prefijo} {mostrar or tex(primitiva)} + C$"
+    if ctx.modo == "opciones" and not forzar_tipeo:
+        relleno = [(sp.diff(integrando, var), "integral_derivaste"), (-primitiva, "integral_signo"),
+                   (2 * primitiva, "integral_factor"), (primitiva * var, "integral_factor")]
+        malos = _distintos(primitiva, errores + relleno, 3, iguales)
+        ops = [Opcion(tex=f"{tex(primitiva)} + C", correcta=True)]
+        ops += [Opcion(tex=f"{tex(e)} + C", error=c) for e, c in malos]
+        ctx.rng.shuffle(ops)
+        return Paso(pregunta=pregunta, tipo="opcion", opciones=ops, esperado=primitiva, prefijo=prefijo,
+                    pistas=pistas, explicacion=explicacion, resumen=resumen, chequeo="primitiva",
+                    var=var, variables=variables, integrando=integrando, mostrar=mostrar or "")
+    return Paso(pregunta=pregunta, tipo="expresion", esperado=primitiva, errores=errores, prefijo=prefijo,
+                pistas=pistas, explicacion=explicacion, resumen=resumen, mostrar=mostrar or "",
+                chequeo="primitiva", var=var, variables=variables, integrando=integrando)
+
+
+def paso_numero(ctx, pregunta, prefijo, valor, errores, pistas, explicacion, mostrar=None,
+                forzar_tipeo=False):
+    """La respuesta es un número (puede tener pi, e, fracciones, raíces)."""
+    valor = sp.nsimplify(valor) if isinstance(valor, float) else sp.sympify(valor)
+    errores = [(sp.sympify(e), c) for e, c in errores if not equivalentes(e, valor)]
+    resumen = f"${prefijo} {mostrar or tex(valor)}$"
+    if ctx.modo == "opciones" and not forzar_tipeo:
+        relleno = [(-valor, "signo_general"), (2 * valor, "factor_constante"),
+                   (valor / 2, "factor_constante"), (valor + 1, "constante_de_mas")]
+        malos = _distintos(valor, errores + relleno, 3)
+        ops = [Opcion(tex=tex(valor), correcta=True)] + [Opcion(tex=tex(e), error=c) for e, c in malos]
+        ctx.rng.shuffle(ops)
+        return Paso(pregunta=pregunta, tipo="opcion", opciones=ops, esperado=valor, prefijo=prefijo,
+                    pistas=pistas, explicacion=explicacion, resumen=resumen, chequeo="numero", variables=())
+    return Paso(pregunta=pregunta, tipo="expresion", esperado=valor, errores=errores, prefijo=prefijo,
+                pistas=pistas, explicacion=explicacion, resumen=resumen, mostrar=mostrar or "",
+                chequeo="numero", variables=())
+
+
+def paso_elegir(ctx, pregunta, correcta, malas, explicacion, resumen, pistas=(), es_tex=True):
+    """Opción múltiple genérica. correcta: str; malas: [(str, codigo_error)]."""
+    ops = [Opcion(tex=correcta, correcta=True) if es_tex else Opcion(texto=correcta, correcta=True)]
+    vistos = {correcta}
+    for t, cod in malas:
+        if t in vistos:
+            continue
+        vistos.add(t)
+        ops.append(Opcion(tex=t, error=cod) if es_tex else Opcion(texto=t, error=cod))
+        if len(ops) == 4:
+            break
+    ctx.rng.shuffle(ops)
+    return Paso(pregunta=pregunta, tipo="opcion", opciones=ops, explicacion=explicacion,
+                resumen=resumen, pistas=list(pistas))
 
 
 REGLAS = {
@@ -742,97 +811,3 @@ def g_regla(ctx):
     paso = paso_regla(ctx, correcta, expl)
     paso.max_intentos = 1
     return Ejercicio("¿Qué regla va?", f"f(x) = {formula}", [paso])
-
-
-# ======================================================== mundos y niveles
-
-@dataclass
-class Nivel:
-    nombre: str
-    descripcion: str
-    generadores: list
-    modo: str = "tipeo"
-    cantidad: int = 5
-    jefe: bool = False
-    tiempo: float | None = None
-    dificultad: int = 1
-    vidas: int = 3
-
-
-@dataclass
-class Mundo:
-    id: str
-    nombre: str
-    tema: str
-    color: tuple
-    niveles: list
-
-
-GENERADORES = {f.__name__: f for f in [
-    g_potencia, g_tabla, g_sumas, g_raices, g_jefe1,
-    g_producto, g_cociente, g_jefe2,
-    g_cadena, g_cadena_trasc, g_cadena_producto, g_cadena_doble, g_jefe3,
-    g_regla,
-]}
-
-MUNDOS = [
-    Mundo("1", "Mundo 1", "Derivadas básicas", (170, 205, 240), [
-        Nivel("Potencias", "La regla de la potencia: $(x^n)' = n\\,x^{n-1}$.", [g_potencia], "opciones", 6),
-        Nivel("Seno, coseno, e y ln", "Las derivadas de la tabla.", [g_tabla], "opciones", 6),
-        Nivel("Sumas de términos", "Ahora tipeás vos: derivar término a término.", [g_sumas], "tipeo", 5),
-        Nivel("Raíces y fracciones", "Reescribir como potencia y derivar.", [g_raices], "tipeo", 5),
-        Nivel("Jefe: todo junto", "Sumas con de todo. Sin pistas.", [g_jefe1], "tipeo", 4, jefe=True),
-    ]),
-    Mundo("2", "Mundo 2", "Producto y cociente", (168, 222, 196), [
-        Nivel("Producto", "$(u\\cdot v)' = u'\\,v + u\\,v'$", [g_producto], "opciones", 5),
-        Nivel("Producto paso a paso", "Derivás $u$, derivás $v$ y armás.", [g_producto], "tipeo", 4),
-        Nivel("Cociente", "$(u/v)' = (u'v - uv')\\,/\\,v^2$", [g_cociente], "opciones", 5),
-        Nivel("Cociente paso a paso", "Derivás $u$, derivás $v$ y armás.", [g_cociente], "tipeo", 4),
-        Nivel("Jefe: producto o cociente", "De una, sin pasos intermedios ni pistas.", [g_jefe2], "tipeo", 4, jefe=True),
-    ]),
-    Mundo("3", "Mundo 3", "Regla de la cadena", (200, 186, 240), [
-        Nivel("Cadena", "Una función adentro de otra: $f'(u)\\cdot u'$.", [g_cadena], "opciones", 5),
-        Nivel("Cadena paso a paso", "Encontrás $u$, derivás $u$ y armás.", [g_cadena], "tipeo", 4),
-        Nivel("ln, raíz y trigonométricas", "Cadenas con ln, raíces y funciones adentro.", [g_cadena_trasc], "tipeo", 4),
-        Nivel("Cadena + producto", "Un producto donde un factor lleva cadena.", [g_cadena_producto], "tipeo", 4),
-        Nivel("Jefe: cadena doble", "Capas dentro de capas. Sin pistas.", [g_jefe3], "tipeo", 4, jefe=True),
-    ]),
-    Mundo("3b", "Mundo 3½", "¿Qué regla va?", (252, 206, 160), [
-        Nivel("Calentamiento", "Elegí la regla. 15 segundos por función.", [g_regla], "opciones", 10, tiempo=15, dificultad=1),
-        Nivel("Trampas", "Constantes, $\\mathrm{sen}^2$ y otras trampitas. 10 segundos.", [g_regla], "opciones", 10, tiempo=10, dificultad=2),
-        Nivel("Reglas anidadas", "¿Qué va primero? 8 segundos.", [g_regla], "opciones", 10, tiempo=8, dificultad=3),
-        Nivel("Jefe: contrarreloj", "6 segundos por función.", [g_regla], "opciones", 12, jefe=True, tiempo=6, dificultad=3),
-    ]),
-]
-
-
-def mundo_por_id(mid):
-    for m in MUNDOS:
-        if m.id == mid:
-            return m
-    raise KeyError(mid)
-
-
-def generar(mundo_id, nivel_idx, gen_nombre, semilla):
-    """Arma un ejercicio exacto a partir de su clave."""
-    nivel = mundo_por_id(mundo_id).niveles[nivel_idx]
-    ctx = Ctx(random.Random(semilla), nivel.modo, nivel.jefe, nivel.dificultad)
-    ej = GENERADORES[gen_nombre](ctx)
-    ej.clave = {"mundo": mundo_id, "nivel": nivel_idx, "gen": gen_nombre, "semilla": semilla}
-    return ej
-
-
-def generar_nivel(mundo_id, nivel_idx, rng=None):
-    rng = rng or random.Random()
-    nivel = mundo_por_id(mundo_id).niveles[nivel_idx]
-    ejercicios, vistos = [], set()
-    intentos = 0
-    while len(ejercicios) < nivel.cantidad and intentos < nivel.cantidad * 20:
-        intentos += 1
-        gen = rng.choice(nivel.generadores).__name__
-        ej = generar(mundo_id, nivel_idx, gen, rng.randrange(10**9))
-        if ej.formula in vistos:
-            continue
-        vistos.add(ej.formula)
-        ejercicios.append(ej)
-    return ejercicios
