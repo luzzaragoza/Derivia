@@ -25,6 +25,10 @@ class Nivel:
     tiempo: float | None = None
     dificultad: int = 1
     vidas: int = 3
+    # cuántos ejercicios del nivel vienen guiados paso a paso (u', v', armar...). Los demás piden
+    # solo la respuesta final, cortitos como en los jefes. None: todos guiados (solo se saca el
+    # "¿cuál es u?" repetido a partir del segundo).
+    guiados: int | None = None
 
 
 @dataclass
@@ -52,19 +56,22 @@ MUNDOS = [
         Nivel("Jefe: todo junto", "Sumas con de todo. Sin pistas.", [g_jefe1], "tipeo", 3, jefe=True),
     ]),
     Mundo("2", "Mundo 2", "Producto y cociente", (168, 222, 196), [
-        Nivel("Producto", "$(u\\cdot v)' = u'\\,v + u\\,v'$", [g_producto], "opciones", 4),
-        Nivel("Producto paso a paso", "Derivás $u$, derivás $v$ y armás.", [g_producto, g_producto, g_detective_producto],
-              "tipeo", 3),
-        Nivel("Cociente", "$(u/v)' = (u'v - uv')\\,/\\,v^2$", [g_cociente], "opciones", 4),
-        Nivel("Cociente paso a paso", "Derivás $u$, derivás $v$ y armás.", [g_cociente, g_cociente, g_detective_producto],
-              "tipeo", 3),
+        Nivel("Producto paso a paso", "$(u\\cdot v)' = u'\\,v + u\\,v'$: derivás $u$, derivás $v$ y armás.", [g_producto],
+              "tipeo", 3, guiados=2),
+        Nivel("Producto de una", "Ya sabés la fórmula: directo a la derivada.", [g_producto, g_producto, g_detective_producto],
+              "tipeo", 3, guiados=0),
+        Nivel("Cociente paso a paso", "$(u/v)' = (u'v - uv')\\,/\\,v^2$: derivás $u$, derivás $v$ y armás.", [g_cociente],
+              "tipeo", 3, guiados=2),
+        Nivel("Cociente de una", "Directo a la derivada.", [g_cociente, g_cociente, g_detective_producto],
+              "tipeo", 3, guiados=0),
         Nivel("Jefe: producto o cociente", "De una, sin pasos intermedios ni pistas.", [g_jefe2], "tipeo", 3, jefe=True),
     ]),
     Mundo("3", "Mundo 3", "Regla de la cadena", (200, 186, 240), [
-        Nivel("Cadena", "Una función adentro de otra: $f'(u)\\cdot u'$.", [g_cadena], "opciones", 4),
-        Nivel("Cadena paso a paso", "Encontrás $u$, derivás $u$ y armás.", [g_cadena], "tipeo", 3),
-        Nivel("ln, raíz y trigonométricas", "Cadenas con ln, raíces y funciones adentro.", [g_cadena_trasc, g_cadena_trasc, g_detective_cadena], "tipeo", 3),
-        Nivel("Cadena + producto", "Un producto donde un factor lleva cadena.", [g_cadena_producto, g_cadena_producto, g_detective_cadena], "tipeo", 3),
+        Nivel("Cadena paso a paso", "Una función adentro de otra: $f'(u)\\cdot u'$. Encontrás $u$, la derivás y armás.",
+              [g_cadena], "tipeo", 3, guiados=2),
+        Nivel("Cadena de una", "Directo a la derivada.", [g_cadena, g_cadena, g_detective_cadena], "tipeo", 3, guiados=0),
+        Nivel("ln, raíz y trigonométricas", "Cadenas con ln, raíces y funciones adentro.", [g_cadena_trasc, g_cadena_trasc, g_detective_cadena], "tipeo", 3, guiados=1),
+        Nivel("Cadena + producto", "Un producto donde un factor lleva cadena.", [g_cadena_producto, g_cadena_producto, g_detective_cadena], "tipeo", 3, guiados=1),
         Nivel("Jefe: cadena doble", "Capas dentro de capas. Sin pistas.", [g_jefe3], "tipeo", 3, jefe=True),
     ]),
     Mundo("3b", "Mundo 3½", "¿Qué regla va?", (252, 206, 160), [
@@ -91,13 +98,13 @@ MUNDOS = [
     Mundo("6", "Mundo 6", "Sustitución", (222, 206, 246), [
         Nivel("Adentro lineal", "$\\int e^{3x}\\,dx$, $\\int \\mathrm{sen}(5x)\\,dx$: se divide por la constante.", [g_lineal], "opciones", 4),
         Nivel("Elegir la u", "¿Qué conviene sustituir?", [g_sust], "opciones", 4),
-        Nivel("Sustitución paso a paso", "Elegís $u$, calculás $du$ y resolvés.", [g_sust], "tipeo", 3),
+        Nivel("Sustitución paso a paso", "Elegís $u$, calculás $du$ y resolvés.", [g_sust], "tipeo", 3, guiados=2),
         Nivel("Acomodar constantes", "Cuando a $du$ le sobra un número.", [g_sust_acomodar, g_sust_acomodar, g_detective_sust_partes], "tipeo", 3),
         Nivel("Jefe: sustitución", "De una, sin pistas.", [g_jefe6], "tipeo", 3, jefe=True),
     ]),
     Mundo("7", "Mundo 7", "Integración por partes", (252, 222, 160), [
         Nivel("¿Quién es u?", "La regla LIATE para elegir bien.", [g_partes_eleccion], "opciones", 4),
-        Nivel("Partes paso a paso", "$\\int u\\,dv = u\\,v - \\int v\\,du$", [g_partes], "tipeo", 3),
+        Nivel("Partes paso a paso", "$\\int u\\,dv = u\\,v - \\int v\\,du$", [g_partes], "tipeo", 3, guiados=2),
         Nivel("Partes con logaritmos", "$\\int x^n \\ln x\\,dx$ y $\\int \\ln x\\,dx$.", [g_partes_log, g_partes_log, g_detective_sust_partes], "tipeo", 3),
         Nivel("Jefe: partes", "Algunas piden partes dos veces. Sin pistas.", [g_jefe7], "tipeo", 3, jefe=True),
     ]),
@@ -167,7 +174,9 @@ def generar_nivel(mundo_id, nivel_idx, rng=None):
         vistos.add((ej.consigna, ej.formula))
         for r in _rasgos(ej):
             usados[r] = usados.get(r, 0) + 1
-        if ejercicios:   # el andamiaje (¿cuál es u?, ¿qué jacobiano?...) solo en el primero
+        if nivel.guiados is not None and len(ejercicios) >= nivel.guiados and "detective" not in gen:
+            ej.pasos = ej.pasos[-1:]     # ya lo practicaste guiado: ahora de una
+        elif ejercicios:   # el andamiaje (¿cuál es u?, ¿qué jacobiano?...) solo en el primero
             sin_andamio = [p for p in ej.pasos if not p.repetitivo]
             if sin_andamio:
                 ej.pasos = sin_andamio
