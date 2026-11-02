@@ -110,7 +110,7 @@ class App:
 
     def _rearmar(self):
         """La pantalla actual vuelve a armar sus botones con la resolución nueva."""
-        armar = getattr(self.escena, "armar", None)
+        armar = getattr(getattr(self, "escena", None), "armar", None)
         if callable(armar):
             try:
                 armar()
