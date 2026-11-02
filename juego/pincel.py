@@ -718,3 +718,113 @@ def sol_bajo(r=74):
         cv.drawCircle(c - r * 0.28, c - r * 0.3, r * 0.2, _paint((255, 236, 200), 150))
 
     return _pieza(("sol_bajo", r), 2 * r + 4, 2 * r + 4, pintar, m), m
+
+
+def ola(ancho, alto, periodo, amp, color, semilla=0):
+    """Tira de mar que se repite cada 'periodo' (para moverla de costado sin cortes):
+    cresta ondulada con espuma, agua con degradé y brillitos."""
+    import random
+    m = 0
+
+    def cresta(x):
+        t = x / periodo * math.tau
+        return amp + math.sin(t) * amp + math.sin(3 * t + 1.3) * amp * 0.25
+
+    def pintar(cv):
+        p = skia.Path()
+        p.moveTo(0, alto)
+        x = 0.0
+        while x <= ancho + 4:
+            p.lineTo(x, cresta(x))
+            x += 4
+        p.lineTo(ancho + 4, alto)
+        p.close()
+        cv.drawPath(p, _paint(Shader=_lineal(0, 0, 0, min(alto, 260), [aclarar(color, 0.16), color,
+                                                                         oscurecer(color, 0.88)], [0, 0.35, 1])))
+        # espuma de la cresta: un brillo suave y una línea clara
+        borde = skia.Path()
+        x = 0.0
+        borde.moveTo(0, cresta(0))
+        while x <= ancho + 4:
+            borde.lineTo(x, cresta(x))
+            x += 4
+        cv.save()
+        cv.clipPath(p, doAntiAlias=True)
+        cv.translate(0, 5)
+        cv.drawPath(borde, _paint(aclarar(color, 0.5), 110, Style=skia.Paint.kStroke_Style, StrokeWidth=8,
+                                  MaskFilter=skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 3)))
+        cv.restore()
+        cv.drawPath(borde, _paint(aclarar(color, 0.62), 235, Style=skia.Paint.kStroke_Style, StrokeWidth=3,
+                                  StrokeCap=skia.Paint.kRound_Cap))
+        # brillitos (se repiten con el mismo período)
+        rng = random.Random(semilla)
+        marcas = [(rng.uniform(0, periodo), rng.uniform(amp * 2 + 14, min(alto - 6, amp * 2 + 90)),
+                   rng.uniform(10, 26)) for _ in range(3)]
+        brillo = _paint(aclarar(color, 0.45), 150, Style=skia.Paint.kStroke_Style, StrokeWidth=2.5,
+                        StrokeCap=skia.Paint.kRound_Cap)
+        x0 = 0.0
+        while x0 < ancho + periodo:
+            for bx, by, bl in marcas:
+                if by < alto - 4:
+                    cv.drawLine(x0 + bx, by, x0 + bx + bl, by, brillo)
+            x0 += periodo
+
+    return _pieza(("ola", ancho, round(alto, 1), periodo, amp, tuple(color), semilla), ancho, alto, pintar, m,
+                  forzar=True), m
+
+
+def pergamino(w, h):
+    """Papel de mapa del tesoro: degradé cálido, viñeta suave, manchitas, cuadrícula,
+    rosa de los vientos y un caminito punteado con su cruz."""
+    import random
+
+    def pintar(cv):
+        cv.drawRect(skia.Rect.MakeWH(w, h), _paint(Shader=_lineal(0, 0, 0, h, [(255, 250, 236), (248, 236, 208)])))
+        rng = random.Random(7)
+        # manchas de papel viejo
+        for _ in range(9):
+            x, y, r = rng.uniform(0, w), rng.uniform(0, h), rng.uniform(60, 180)
+            cv.drawCircle(x, y, r, _paint(Shader=_radial(x, y, r, [(214, 176, 120, 26), (214, 176, 120, 0)])))
+        # cuadrícula muy suave
+        linea = _paint((180, 140, 90), 22, Style=skia.Paint.kStroke_Style, StrokeWidth=1)
+        for x in range(0, int(w) + 1, 80):
+            cv.drawLine(x, 0, x, h, linea)
+        for y in range(0, int(h) + 1, 80):
+            cv.drawLine(0, y, w, y, linea)
+        # rosa de los vientos
+        cx, cy = w - 90, h - 90
+        tinta = (170, 120, 70)
+        for k in range(8):
+            a = k * math.tau / 8 - math.pi / 2
+            largo = 62 if k % 2 == 0 else 38
+            punta = (cx + math.cos(a) * largo, cy + math.sin(a) * largo)
+            for lado, alfa in ((0.35, 55), (-0.35, 30)):
+                q = (cx + math.cos(a + lado) * 12, cy + math.sin(a + lado) * 12)
+                p = skia.Path()
+                p.moveTo(*punta)
+                p.lineTo(*q)
+                p.lineTo(cx, cy)
+                p.close()
+                cv.drawPath(p, _paint(tinta, alfa))
+        for r, a in ((46, 50), (52, 30)):
+            cv.drawCircle(cx, cy, r, _paint(tinta, a, Style=skia.Paint.kStroke_Style, StrokeWidth=1.6))
+        cv.drawCircle(cx, cy, 4, _paint(tinta, 70))
+        # caminito punteado con una cruz
+        camino = skia.Path()
+        for i in range(41):
+            t = i / 40
+            x, y = 40 + t * 260, h - 40 - math.sin(t * 5) * 30 - t * 60
+            (camino.moveTo if i == 0 else camino.lineTo)(x, y)
+        guion = _paint((190, 130, 80), 60, Style=skia.Paint.kStroke_Style, StrokeWidth=3,
+                       StrokeCap=skia.Paint.kRound_Cap, PathEffect=skia.DashPathEffect.Make([1, 11], 0))
+        cv.drawPath(camino, guion)
+        x, y = 300, h - 100 - math.sin(5) * 30
+        cruz = _paint((200, 90, 70), 70, Style=skia.Paint.kStroke_Style, StrokeWidth=4, StrokeCap=skia.Paint.kRound_Cap)
+        cv.drawLine(x - 9, y - 9, x + 9, y + 9, cruz)
+        cv.drawLine(x - 9, y + 9, x + 9, y - 9, cruz)
+        # viñeta: bordes un poco tostados
+        cv.drawRect(skia.Rect.MakeWH(w, h), _paint(Shader=skia.GradientShader.MakeRadial(
+            (w / 2, h / 2), math.hypot(w, h) / 2, [_c((150, 100, 50), 0), _c((150, 100, 50), 0), _c((150, 100, 50), 60)],
+            [0, 0.62, 1], skia.TileMode.kClamp, 0, skia.Matrix.Scale(1, h / w * 1.25))))
+
+    return _pieza(("pergamino", w, h), w, h, pintar, 0, forzar=True)

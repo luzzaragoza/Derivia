@@ -144,7 +144,11 @@ class Mar:
     def actualizar(self, dt):
         self.t += dt
 
+    PERIODOS = (420, 300, 360, 260)
+
     def dibujar(self, sup, desde=0, hasta=ANCHO):
+        if pincel.HAY_SKIA and self._dibujar_fino(sup, desde, hasta):
+            return
         n = len(self.capas)
         alto = ALTO - self.y
         for k, color in enumerate(self.capas):
@@ -162,6 +166,33 @@ class Mar:
                       for x in range(desde, hasta + 21, 20)]
             if len(espuma) > 1:
                 dibujo.lines(sup, ui.aclarar(color, 0.55), False, espuma, 3)
+
+
+def _mar_fino(self, sup, desde, hasta):
+    n = len(self.capas)
+    alto = ALTO - self.y
+    clip = sup.get_clip()
+    if (desde, hasta) != (0, ANCHO):
+        sup.set_clip(pygame.Rect(desde, 0, hasta - desde, ALTO))
+    try:
+        for k, color in enumerate(self.capas):
+            base = self.y + k * alto / (n + 0.5)
+            amp = 6 + k * 2
+            periodo = self.PERIODOS[k % len(self.PERIODOS)]
+            with pincel.siempre():
+                tira, _m = pincel.ola(ANCHO + periodo, ALTO - base + 2 * amp + 4, periodo, amp, color, k)
+            if tira is None:
+                return False
+            vel = (22 + 10 * k) * (1 if k % 2 == 0 else -1)
+            dx = -((self.t * vel) % periodo)
+            dy = math.sin(self.t * (0.9 + 0.3 * k) + k) * 2.5
+            sup.blit(tira, (dx, base - 2 * amp + dy))
+    finally:
+        sup.set_clip(clip)
+    return True
+
+
+Mar._dibujar_fino = _mar_fino
 
 
 def palmera(sup, base, alto=110, inclina=0.25, escala=1.0):
@@ -294,6 +325,17 @@ def pergamino():
     clave = ("pergamino", Lienzo(1, 1).e)
     if clave in _CACHE:
         return _CACHE[clave]
+    if pincel.HAY_SKIA:
+        papel = pincel.pergamino(ANCHO, ALTO)
+        if papel is not None:
+            s = Lienzo(ANCHO, ALTO, alfa=False)
+            s.blit(papel, (0, 0))
+            arr = pygame.surfarray.pixels3d(s.sup)   # granito de papel, a la resolución real
+            ruido = np.random.default_rng(3).normal(0, 2.6, arr.shape[:2] + (1,))
+            arr[:] = np.clip(arr.astype(np.int16) + ruido, 0, 255).astype(np.uint8)
+            del arr
+            _CACHE[clave] = s
+            return s
     s = gradiente(ANCHO, ALTO, (255, 249, 233), (247, 234, 204))
     rng = np.random.default_rng(3)
     # manchitas de papel (a la resolución real)
@@ -435,15 +477,41 @@ def hongo(sup, base, escala=1.0, color=(200, 80, 110)):
 
 
 def montana(sup, base, ancho, alto):
+    """Dos picos con nieve, crestas y una cascada que cae a un laguito."""
     bx, by = base
-    _con_borde_poligono(sup, [(bx - ancho / 2, by), (bx, by - alto), (bx + ancho / 2, by)], (150, 150, 168))
-    _con_borde_poligono(sup, [(bx - ancho * 0.14, by - alto * 0.72), (bx, by - alto), (bx + ancho * 0.14, by - alto * 0.72),
-                              (bx + ancho * 0.05, by - alto * 0.66), (bx - ancho * 0.04, by - alto * 0.7)], (250, 250, 255), 2)
-    # cascada
-    _d(sup).rect(sup, (150, 210, 240), (bx + ancho * 0.08, by - alto * 0.55, 16, alto * 0.55))
-    for k in range(4):
-        y = by - alto * 0.5 + k * alto * 0.13
-        _d(sup).line(sup, (230, 248, 255), (bx + ancho * 0.08 + 4, y), (bx + ancho * 0.08 + 4, y + 14), 2)
+    d = _d(sup)
+    # pico de atrás (más chico y más azulado, da profundidad)
+    atras = [(bx + ancho * 0.05, by), (bx + ancho * 0.36, by - alto * 0.78), (bx + ancho * 0.62, by)]
+    _con_borde_poligono(sup, atras, (168, 172, 196))
+    _con_borde_poligono(sup, [(bx + ancho * 0.29, by - alto * 0.62), (bx + ancho * 0.36, by - alto * 0.78),
+                              (bx + ancho * 0.43, by - alto * 0.62), (bx + ancho * 0.36, by - alto * 0.66)],
+                        (246, 248, 255), 2)
+    # pico principal
+    frente = [(bx - ancho / 2, by), (bx - ancho * 0.12, by - alto * 0.8), (bx, by - alto), (bx + ancho * 0.1, by - alto * 0.86),
+              (bx + ancho * 0.42, by)]
+    _con_borde_poligono(sup, frente, (150, 146, 168))
+    # lado en sombra
+    d.polygon(sup, (126, 120, 146), [(bx, by - alto), (bx + ancho * 0.1, by - alto * 0.86), (bx + ancho * 0.42, by),
+                                     (bx + ancho * 0.08, by)])
+    # nieve con "goteo"
+    nieve = [(bx - ancho * 0.16, by - alto * 0.74), (bx - ancho * 0.12, by - alto * 0.8), (bx, by - alto),
+             (bx + ancho * 0.1, by - alto * 0.86), (bx + ancho * 0.15, by - alto * 0.78), (bx + ancho * 0.08, by - alto * 0.72),
+             (bx + ancho * 0.03, by - alto * 0.76), (bx - ancho * 0.03, by - alto * 0.68), (bx - ancho * 0.08, by - alto * 0.75)]
+    _con_borde_poligono(sup, nieve, (250, 252, 255), 2)
+    # crestas de roca
+    for (x1, y1, x2, y2) in ((-0.2, 0.55, -0.28, 0.3), (0.16, 0.6, 0.24, 0.32), (-0.05, 0.62, -0.1, 0.4)):
+        d.line(sup, (110, 104, 128), (bx + ancho * x1, by - alto * y1), (bx + ancho * x2, by - alto * y2), 3)
+    # cascada con espuma abajo
+    cx = bx + ancho * 0.02
+    d.rect(sup, ui.BORDE, (cx - 10, by - alto * 0.6, 20, alto * 0.6 - 4), border_radius=6)
+    d.rect(sup, (150, 210, 240), (cx - 7, by - alto * 0.6 + 2, 14, alto * 0.6 - 8), border_radius=5)
+    for k in range(5):
+        y = by - alto * 0.55 + k * alto * 0.1
+        d.line(sup, (236, 250, 255), (cx - 2 + (k % 2) * 4, y), (cx - 2 + (k % 2) * 4, y + 12), 2)
+    d.ellipse(sup, ui.BORDE, (cx - 34, by - 14, 68, 22))
+    d.ellipse(sup, (120, 196, 230), (cx - 31, by - 12, 62, 17))
+    for dx in (-14, 0, 14):
+        d.circle(sup, (248, 252, 255), (cx + dx, by - 10), 6)
 
 
 def volcan(sup, base, ancho, alto):
@@ -508,7 +576,7 @@ def _decorar(s, deco, cx, cy, w, h, rng, pasto):
             for p in desparramado[:4]:
                 roca(s, p, rng.uniform(12, 22), (130, 130, 140))
     elif deco == "montaña":
-        montana(s, (cx - w * 0.18, cy - h * 0.18), w * 0.42, h * 0.62)
+        montana(s, (cx - w * 0.2, cy - h * 0.2), w * 0.3, h * 0.42)
         for p in atras[1::2]:
             pino(s, p, 110)
     elif deco == "hongos":
