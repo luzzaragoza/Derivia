@@ -114,7 +114,8 @@ class Menu(Escena):
         x, y = 690, 236
         self.botones = [
             Boton((x, y, 400, 74), "¡Jugar!", self.jugar, CORAL, CREMA, tam=34, tecla=[pygame.K_RETURN, pygame.K_KP_ENTER]),
-            Boton((x, y + 92, 400, 56), "Tienda del michi", lambda: app.cambiar(Tienda(app), "ola"), (255, 170, 200), tam=24),
+            Boton((x, y + 92, 400, 56), f"Tienda de {app.progreso.nombre_gato}" if app.progreso.nombre_gato
+                  else "Tienda del michi", lambda: app.cambiar(Tienda(app), "ola"), (255, 170, 200), tam=24),
             Boton((x, y + 162, 400, 56), f"Cuaderno de errores ({n})", lambda: app.cambiar(Cuaderno(app)), SOL, tam=23),
             Boton((x, y + 232, 400, 56), "Cómo escribir fórmulas", lambda: app.cambiar(Ayuda(app)), LAVANDA, tam=23),
             Boton((x, y + 302, 193, 56), "Opciones", self.abrir_opciones, ARENA, tam=22),
@@ -128,6 +129,10 @@ class Menu(Escena):
         self.app.salir()
 
     def evento(self, e):
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect_nombre.collidepoint(e.pos):
+            sonidos.tocar("click")
+            self.app.cambiar(NombreGato(self.app), "fundido")
+            return True
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect_gato.collidepoint(e.pos):
             sonidos.tocar("miau")
             self.gato.reaccionar(random.choice(["feliz", "sorpresa", "festejo"]), 1.2)
@@ -135,6 +140,7 @@ class Menu(Escena):
         return super().evento(e)
 
     rect_gato = pygame.Rect(150, 420, 220, 240)
+    rect_nombre = pygame.Rect(0, 0, 0, 0)
 
     def actualizar(self, dt):
         self.t += dt
@@ -150,6 +156,13 @@ class Menu(Escena):
         paisaje.dibujar_isla(sup, (math.sin(self.t * 0.8) * 2, 470), 520, 230, ui.PASTO, semilla=5, palmeras=2)
         paisaje.dibujar_isla(sup, (1040, 610), 220, 110, ui.PASTO, semilla=9, palmeras=1)
         self.gato.dibujar(sup, (260, 640))
+        nombre = self.app.progreso.nombre_gato or "¿Nombre?"
+        t = ui.texto_borde(nombre, 22, CREMA, MADERA_OSC, 2)
+        self.rect_nombre = pygame.Rect(0, 0, t.get_width() + 40, 42)
+        self.rect_nombre.midtop = (260, 666)
+        encima = self.rect_nombre.collidepoint(pygame.mouse.get_pos())
+        ui.tabla_madera(sup, self.rect_nombre.move(0, -2 if encima else 0), radio=12)
+        sup.blit(t, t.get_rect(center=self.rect_nombre.move(0, -2 if encima else 0).center))
         # título
         titulo = ui.texto_borde("Derivia", 128, SOL, BORDE, 6)
         y = 40 + math.sin(self.t * 1.6) * 6
@@ -185,8 +198,9 @@ class Mapa(Escena):
             abiertos = [m.id for m in MUNDOS if prog.mundo_desbloqueado(m.id)]
             mundo_id = abiertos[-1] if abiertos else MUNDOS[0].id
         self.sel = [m.id for m in MUNDOS].index(mundo_id)
-        self.cielo = paisaje.Cielo(semilla=4, nubes=5)
-        self.mar = paisaje.Mar(215, [(116, 204, 216), (88, 190, 204), ui.MAR, ui.MAR_OSC])
+        self.fondos = {}
+        self.humo, self.gotas, self.luciernagas = [], [], []
+        self.t_rayo, self.rayo = 4.0, None
         self.gato = Gato(92)
         self.t = 0.0
         self.desliz = None
@@ -228,8 +242,8 @@ class Mapa(Escena):
         m = MUNDOS[idx]
         p = self.app.progreso
         s = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
-        pasto = tuple(int(a * 0.55 + b * 0.45) for a, b in zip(ui.PASTO, m.color))
-        paisaje.dibujar_isla(s, (100, 205), 1080, 500, pasto, semilla=idx * 7 + 1, palmeras=4, palmeras_borde=True)
+        paisaje.isla_tema(s, (100, 205), 1080, 500, paisaje.tema(m.id), semilla=idx * 7 + 1, palmeras=4,
+                          palmeras_borde=True)
         nodos = self._nodos(m)
         curva = _catmull(nodos)
         # camino
@@ -323,6 +337,7 @@ class Mapa(Escena):
         direccion = 1 if destino > self.sel else -1
         self.desliz = [0.0, direccion, self.sel]
         self.sel = destino
+        self.humo, self.gotas, self.luciernagas, self.rayo = [], [], [], None
         self.hover = None
         self.armar()
         self.gato.reaccionar("feliz", 0.8)
@@ -374,8 +389,10 @@ class Mapa(Escena):
 
     def actualizar(self, dt):
         self.t += dt
-        self.cielo.actualizar(dt)
-        self.mar.actualizar(dt)
+        for cielo, mar in self.fondos.values():
+            cielo.actualizar(dt)
+            mar.actualizar(dt)
+        self._efectos_tema(dt)
         self.gato.actualizar(dt)
         self.fx.actualizar(dt)
         a = self.arranque
@@ -434,9 +451,98 @@ class Mapa(Escena):
         pie_s = ui.texto(pie, 15, ui.CORAL_OSC if abierto else SUAVE, negrita=True)
         sup.blit(pie_s, (rect.left + 16, y + 28))
 
+    # ------------------------------------------------ fondo de cada isla
+    def _fondo(self, idx):
+        if idx not in self.fondos:
+            t = paisaje.tema(MUNDOS[idx].id)
+            self.fondos[idx] = (paisaje.Cielo(semilla=4, nubes=5, tema=t),
+                                paisaje.Mar(215, [ui.aclarar(t["mar"][0], 0.1)] + t["mar"]))
+        return self.fondos[idx]
+
+    def _dibujar_fondo(self, sup, idx):
+        cielo, mar = self._fondo(idx)
+        cielo.dibujar(sup)
+        mar.dibujar(sup)
+
+    def _efectos_tema(self, dt):
+        deco = paisaje.tema(self.mundo.id)["deco"]
+        if deco == "volcan":
+            if random.random() < dt * 5:
+                cx, cy = paisaje.volcan_cima((100, 205), 1080, 500)
+                self.humo.append([cx + random.uniform(-8, 8), cy, random.uniform(10, 16), 0.0])
+            for h in self.humo:
+                h[1] -= 26 * dt
+                h[0] += 10 * dt
+                h[2] += 9 * dt
+                h[3] += dt
+            self.humo = [h for h in self.humo if h[3] < 3.5]
+        elif deco == "tormenta":
+            self.t_rayo -= dt
+            if self.t_rayo <= 0:
+                x = random.uniform(200, ANCHO - 200)
+                puntos = [(x, 0)]
+                for k in range(1, 7):
+                    puntos.append((puntos[-1][0] + random.uniform(-40, 40), k * 34))
+                self.rayo = [puntos, 0.35]
+                self.t_rayo = random.uniform(4, 8)
+                sonidos.tocar("trueno", 0.5)
+            if self.rayo:
+                self.rayo[1] -= dt
+                if self.rayo[1] <= 0:
+                    self.rayo = None
+            for _ in range(int(dt * 220) + 1):
+                self.gotas.append([random.uniform(0, ANCHO + 100), random.uniform(-30, 0)])
+            for g in self.gotas:
+                g[0] -= 140 * dt
+                g[1] += 620 * dt
+            self.gotas = [g for g in self.gotas if g[1] < ALTO]
+        elif deco == "calavera":
+            if not self.luciernagas:
+                self.luciernagas = [[random.uniform(150, 1130), random.uniform(300, 640), random.uniform(0, 6.28)]
+                                    for _ in range(16)]
+            for f in self.luciernagas:
+                f[2] += dt
+
+    def _dibujar_efectos_tema(self, sup):
+        deco = paisaje.tema(self.mundo.id)["deco"]
+        if deco == "volcan":
+            for x, y, r, edad in self.humo:
+                capa = pygame.Surface((int(r * 2) + 2, int(r * 2) + 2), pygame.SRCALPHA)
+                pygame.draw.circle(capa, (120, 110, 120, int(150 * (1 - edad / 3.5))), (r + 1, r + 1), r)
+                sup.blit(capa, (x - r, y - r))
+        elif deco == "tormenta":
+            for x, y in self.gotas:
+                pygame.draw.line(sup, (170, 190, 220), (x, y), (x - 4, y + 12), 1)
+            if self.rayo:
+                puntos, vida = self.rayo
+                flash = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+                flash.fill((255, 255, 255, int(110 * vida / 0.35)))
+                sup.blit(flash, (0, 0))
+                pygame.draw.lines(sup, (255, 250, 200), False, puntos, 5)
+                pygame.draw.lines(sup, (255, 255, 255), False, puntos, 2)
+        elif deco == "calavera":
+            for x, y, fase in self.luciernagas:
+                px = x + math.sin(fase * 0.7) * 30
+                py = y + math.cos(fase * 0.9) * 18
+                brillo = 0.5 + 0.5 * math.sin(fase * 3)
+                halo = pygame.Surface((24, 24), pygame.SRCALPHA)
+                pygame.draw.circle(halo, (200, 255, 140, int(90 * brillo)), (12, 12), 11)
+                sup.blit(halo, (px - 12, py - 12))
+                pygame.draw.circle(sup, (230, 255, 170), (px, py), 2.5)
+            niebla = paisaje.niebla()
+            desplaza = (self.t * 18) % ANCHO
+            sup.blit(niebla, (desplaza - ANCHO, 560))
+            sup.blit(niebla, (desplaza, 560))
+
     def dibujar(self, sup):
-        self.cielo.dibujar(sup)
-        self.mar.dibujar(sup)
+        if self.desliz:
+            self._dibujar_fondo(sup, self.desliz[2])
+            nuevo = pygame.Surface((ANCHO, ALTO))
+            self._dibujar_fondo(nuevo, self.sel)
+            nuevo.set_alpha(int(255 * suave(self.desliz[0])))
+            sup.blit(nuevo, (0, 0))
+        else:
+            self._dibujar_fondo(sup, self.sel)
         if self.desliz:
             k = suave(self.desliz[0])
             d = self.desliz[1]
@@ -461,6 +567,7 @@ class Mapa(Escena):
                 r = (40 if m.niveles[self.gato_nodo].jefe else 32) + 6 + 4 * math.sin(self.t * 4)
                 pygame.draw.circle(sup, CREMA, (nx, ny), r, 4)
                 self.gato.dibujar(sup, (nx - 58, ny + 30))
+            self._dibujar_efectos_tema(sup)
             if self.hover is not None:
                 nx, ny = self.nodos[self.hover]
                 pygame.draw.circle(sup, (255, 255, 255), (nx, ny), 44, 3)
@@ -469,7 +576,7 @@ class Mapa(Escena):
         tengo, total = self.app.progreso.estrellas_mundo(m.id)
         rect = pygame.Rect(ANCHO // 2 - 290, 86, 580, 80)
         ui.tabla_madera(sup, rect)
-        t1 = ui.texto_borde(m.nombre.upper(), 17, SOL, MADERA_OSC, 2)
+        t1 = ui.texto_borde(f"{m.nombre.upper()} · {paisaje.tema(m.id)['nombre'].upper()}", 17, SOL, MADERA_OSC, 2)
         t2 = ui.texto_borde(m.tema, 30, CREMA, MADERA_OSC, 3)
         sup.blit(t1, t1.get_rect(midtop=(rect.centerx, rect.top + 8)))
         sup.blit(t2, t2.get_rect(midtop=(rect.centerx, rect.top + 28)))
@@ -487,8 +594,11 @@ class Mapa(Escena):
 
 # =============================================================== JUEGO
 
-TECLADO = [("x²", "^2", 0), ("^", "^", 0), ("()", "()", 1), ("sen", "sen()", 1), ("cos", "cos()", 1),
-           ("e^", "e^()", 1), ("ln", "ln()", 1), ("√", "raiz()", 1), ("/", "/", 0), ("·", "*", 0)]
+# (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor)
+TECLADO = [("x^{n}", "^()", 1), (r"(\;\;)", "()", 1), ("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0),
+           ("/", "/", 0), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz3()", 1),
+           (r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{x}", "e^()", 1), (r"\ln", "ln()", 1)]
+FUNCIONES_TECLADO = (r"\mathrm{sen}", r"\cos", "e^{x}", r"\ln")
 
 PIE_GATO = (96, ALTO - 8)
 BOCA_GATO = (150, ALTO - 120)
@@ -532,7 +642,8 @@ class Juego(Escena):
         self.fuego = Fueguito()
         self.gato = Gato(128)
         self.gato.reaccionar("feliz", 1.0)
-        self.charla = random.choice(FRASES_INICIO)
+        self.charla = ("¡Es un jefe! Acá no hay pistas, pero vos podés." if self.jefe
+                       else random.choice(FRASES_INICIO))
         self.t_charla = 3.5
         self.sacudir = 0
         self.t = 0.0
@@ -613,11 +724,24 @@ class Juego(Escena):
         if VAR_Z in self.paso.variables:
             extra.append(("z", "z", 0))
         if self.paso.chequeo == "primitiva":
-            extra.append(("+C", "+C", 0))
+            extra.append((r"+\,C", "+C", 0))
         if self.paso.chequeo == "numero":
-            extra = [("π", "pi", 0), ("e", "e", 0)]
-            teclas = [t for t in teclas if t[0] not in ("sen", "cos", "e^", "ln")]
+            extra = [(r"\pi", "pi", 0), ("e", "e", 0)]
+            teclas = [t for t in teclas if t[0] not in FUNCIONES_TECLADO]
         return teclas + extra
+
+    def _boton_pista(self, rect):
+        """El botón de pista siempre está, así se entiende cuándo se puede usar."""
+        n, vistas = len(self.paso.pistas), self.pistas_vistas
+        if self.jefe:
+            txt, ok = "Sin pistas (jefe)", False
+        elif not n:
+            txt, ok = "Sin pistas acá", False
+        elif vistas >= n:
+            txt, ok = "No hay más pistas", False
+        else:
+            txt, ok = ("Pista (−5)" if n == 1 else f"Pista {vistas + 1}/{n} (−5)"), True
+        return Boton(rect, txt, self.pista, SOL, TINTA, tam=19, habilitado=ok, sonido="pista")
 
     def armar(self):
         """Calcula la ubicación de todo según el estado actual."""
@@ -661,7 +785,6 @@ class Juego(Escena):
         y += s.get_height() + 16
 
         respondiendo = self.estado == "pregunta"
-        hay_pista = self.paso.pistas and not self.jefe and self.pistas_vistas < len(self.paso.pistas)
         if self.paso.tipo == "expresion":
             pre = ui.escalar_a(ui.formula(ui.fracciones_grandes(self.paso.prefijo), 30).sup, 380) \
                 if self.paso.prefijo else None
@@ -678,24 +801,19 @@ class Juego(Escena):
             y += 44
             if respondiendo:
                 teclas = self._teclado()
-                anchos = [max(46, ui.texto(et, 18, TINTA, negrita=True).get_width() + 22) for et, _, _ in teclas]
-                total = sum(anchos) + 8 * (len(anchos) - 1)
+                etiquetas = [ui.formula(et, 22).sup for et, _, _ in teclas]
+                anchos = [max(48, e.get_width() + 24) for e in etiquetas]
+                total = sum(anchos) + 7 * (len(anchos) - 1)
                 x = cx - total // 2
-                for (et, ins, ret), w in zip(teclas, anchos):
-                    self.botones.append(Boton((x, y, w, 36), et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
-                                              ARENA, tam=18, radio=10, relieve=4, sonido="tecla"))
-                    x += w + 8
-                y += 52
-                fila = []
-                if hay_pista:
-                    fila.append(("Pista (−5)", self.pista, SOL, TINTA))
-                fila.append(("Comprobar  ↵", self.comprobar, CORAL, CREMA))
-                total = len(fila) * 230 + (len(fila) - 1) * 18
-                x = cx - total // 2
-                for txt, acc, col, ct in fila:
-                    self.botones.append(Boton((x, y, 230, 52), txt, acc, col, ct, tam=21,
-                                              sonido="pista" if acc == self.pista else None))
-                    x += 248
+                for (et, ins, ret), w, sup_et in zip(teclas, anchos, etiquetas):
+                    self.botones.append(Boton((x, y, w, 40), sup_et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
+                                              ARENA, radio=10, relieve=4, sonido="tecla"))
+                    x += w + 7
+                y += 56
+                x = cx - (250 + 18 + 230) // 2
+                self.botones.append(self._boton_pista((x, y, 250, 52)))
+                self.botones.append(Boton((x + 268, y, 230, 52), "Comprobar  ↵", self.comprobar, CORAL, CREMA,
+                                          tam=21, sonido=None))
                 y += 64
         else:
             ops = self.paso.opciones
@@ -716,9 +834,8 @@ class Juego(Escena):
                 self.rect_opciones[k] = rect
                 self.botones.append(b)
             y += ((len(ops) + 1) // 2) * (alto + 16)
-            if respondiendo and hay_pista:
-                self.botones.append(Boton((cx - 115, y, 230, 46), "Pista (−5)", self.pista, SOL, tam=19,
-                                          sonido="pista"))
+            if respondiendo:
+                self.botones.append(self._boton_pista((cx - 125, y, 250, 46)))
                 y += 58
         # globito del gato: feedback, pista o charla
         self.panel = None
@@ -769,7 +886,7 @@ class Juego(Escena):
             self.preview = None
             return
         try:
-            self.preview = ("ok", tex(self._parsear(texto)))
+            self.preview = ("ok", tex(self._parsear(texto, tal_cual=True), tal_cual=True))
         except ErrorEntrada as ex:
             self.preview = ("err", str(ex))
         except Exception:
@@ -788,8 +905,8 @@ class Juego(Escena):
                 self.feedback = None
             self.armar()
 
-    def _parsear(self, texto):
-        return parsear(texto, self.paso.variables, permitir_c=self.paso.chequeo == "primitiva")
+    def _parsear(self, texto, tal_cual=False):
+        return parsear(texto, self.paso.variables, permitir_c=self.paso.chequeo == "primitiva", tal_cual=tal_cual)
 
     def comprobar(self):
         if self.estado != "pregunta" or self.paso.tipo != "expresion":
@@ -864,16 +981,16 @@ class Juego(Escena):
                 self.t_marcas.setdefault(k, pygame.time.get_ticks() / 1000)
         # festejo
         ox, oy = origen or self._origen()
-        self.fx.confeti(ox, oy, 34 + min(self.racha, 8) * 4, 1.0)
-        self.fx.texto(ox, oy - 30, f"+{pts}", ui.SOL, 34)
-        for k in range(min(5, 1 + pts // 8)):
-            self.fx.volar((ox, oy), self.pos_monedas, self._llego_moneda, dur=0.6, demora=k * 0.08)
+        self.fx.confeti(ox, oy, 12 + min(self.racha, 6) * 2, 0.55)
+        self.fx.texto(ox, oy - 34, f"+{pts}", ui.SOL, 30, sube=45, dur=1.4)
+        for k in range(min(3, 1 + pts // 12)):
+            self.fx.volar((ox, oy), self.pos_monedas, self._llego_moneda, dur=0.95, demora=0.25 + k * 0.15)
         if self.racha >= 3:
-            sonidos.tocar("bien_racha")
+            sonidos.tocar("bien_racha", 0.75)
         else:
-            sonidos.tocar("bien")
+            sonidos.tocar("bien", 0.75)
         if self.racha in (3, 5, 8, 12, 20):
-            self.fx.texto(ANCHO // 2, 300, f"¡Racha ×{self.racha}!", ui.CORAL, 52, sube=80, dur=1.4)
+            self.fx.texto(ANCHO // 2, 300, f"¡Racha ×{self.racha}!", ui.CORAL, 44, sube=50, dur=1.8)
             sonidos.tocar("fuego")
             self.gato.reaccionar("festejo", 1.4)
         else:
@@ -1115,6 +1232,13 @@ class Juego(Escena):
         if self.panel:
             p = self.panel
             ui.globo(sup, p["rect"], BOCA_GATO, p["color"], p["borde"], 3)
+            if self.app.progreso.nombre_gato:
+                et = ui.texto_borde(self.app.progreso.nombre_gato, 16, CREMA, MADERA_OSC, 2)
+                r = pygame.Rect(0, 0, et.get_width() + 22, 26)
+                r.bottomleft = (p["rect"].left + 18, p["rect"].top + 6)
+                pygame.draw.rect(sup, MADERA, r, border_radius=13)
+                pygame.draw.rect(sup, MADERA_OSC, r, 2, border_radius=13)
+                sup.blit(et, et.get_rect(center=r.center))
             sup.blit(p["titulo"], (p["rect"].left + 22, p["rect"].top + 14))
             if p["cuerpo"]:
                 sup.blit(p["cuerpo"], (p["rect"].left + 22, p["rect"].top + 22 + p["titulo"].get_height()))
@@ -1137,10 +1261,17 @@ class FinNivel(Escena):
         self.estrellas = estrellas
         self.nuevo_mundo = nuevo_mundo
         self.t = 0.0
-        self.cielo = paisaje.Cielo(semilla=6)
-        self.mar = paisaje.Mar(520)
+        self.es_jefe = gano and not juego.practica and juego.jefe
+        self.tema = paisaje.tema(juego.mundo.id) if juego.mundo else paisaje.tema("1")
+        self.cielo = paisaje.Cielo(semilla=6, tema=self.tema)
+        self.mar = paisaje.Mar(520, self.tema["mar"])
         self.fx = Efectos()
         self.gato = Gato(170)
+        self.t_fuegos = 0.9
+        if self.es_jefe:
+            puesta = dict(app.progreso.ropa_puesta)
+            puesta["cabeza"] = "corona"      # ¡corona de campeona para la foto!
+            self.gato.ropa = tuple(puesta.values())
         self.estrellas_hechas = 0
         self.puntos_vistos = 0
         self.ultimo_tic = 0
@@ -1149,8 +1280,10 @@ class FinNivel(Escena):
         if gano:
             self.gato.reaccionar("festejo", 99)
             self.gato.animo_base = "feliz"
-            self.fx.lluvia_confeti(ANCHO, 140)
-            sonidos.tocar("nivel")
+            self.fx.lluvia_confeti(ANCHO, 200 if self.es_jefe else 140)
+            sonidos.tocar("jefe" if self.es_jefe else "nivel")
+            if self.es_jefe:
+                sonidos.agachar(3.5)
         else:
             self.gato.reaccionar("triste", 99)
             self.gato.animo_base = "triste"
@@ -1166,8 +1299,7 @@ class FinNivel(Escena):
                 if i + 1 < len(m.niveles):
                     b.append(("Siguiente nivel", lambda: app.cambiar(Juego(app, m.id, i + 1), "ola"), CORAL, CREMA))
                 elif nuevo_mundo:
-                    b.append((f"Ir al {nuevo_mundo.nombre}", lambda: app.cambiar(Mapa(app, nuevo_mundo.id), "ola"),
-                              CORAL, CREMA))
+                    b.append(("¡A la isla nueva!", lambda: app.cambiar(Mapa(app, nuevo_mundo.id), "ola"), CORAL, CREMA))
                 b.append(("Repetir", lambda: app.cambiar(Juego(app, m.id, i), "ola"), LAVANDA, TINTA))
             else:
                 b.append(("Reintentar", lambda: app.cambiar(Juego(app, m.id, i), "ola"), CORAL, CREMA))
@@ -1186,6 +1318,8 @@ class FinNivel(Escena):
             self.app.cambiar(Mapa(self.app, self.j.mundo.id), "ola")
 
     def _pos_estrella(self, k):
+        if self.es_jefe:
+            return (ANCHO // 2 + 120 + (k - 1) * 96, 228 - (10 if k == 1 else 0))
         return (ANCHO // 2 + 120 + (k - 1) * 110, 200 - (16 if k == 1 else 0))
 
     def actualizar(self, dt):
@@ -1194,6 +1328,15 @@ class FinNivel(Escena):
         self.mar.actualizar(dt)
         self.fx.actualizar(dt)
         self.gato.actualizar(dt)
+        if self.es_jefe:
+            self.t_fuegos -= dt
+            if self.t_fuegos <= 0:
+                x, y = random.uniform(80, ANCHO - 80), random.uniform(50, 300)
+                color = random.choice([ui.SOL, CORAL, (140, 220, 255), (190, 150, 240), (150, 230, 140)])
+                self.fx.chispas(x, y, 30, color, 380)
+                self.fx.chispas(x, y, 10, (255, 255, 255), 160)
+                sonidos.tocar("fuegos", 0.35, variar=True)
+                self.t_fuegos = random.uniform(0.4, 0.9) if self.t < 7 else random.uniform(1.5, 3)
         if self.gano and not self.j.practica:
             while self.estrellas_hechas < self.estrellas and self.t > 0.6 + self.estrellas_hechas * 0.45:
                 x, y = self._pos_estrella(self.estrellas_hechas)
@@ -1218,11 +1361,14 @@ class FinNivel(Escena):
             gris.fill((60, 70, 90, 70))
             sup.blit(gris, (0, 0))
         self.mar.dibujar(sup)
-        paisaje.dibujar_isla(sup, (-20, 545), 400, 190, ui.PASTO, semilla=12, palmeras=1)
+        paisaje.isla_tema(sup, (-20, 545), 400, 190, self.tema, semilla=12, palmeras=1)
         self.gato.dibujar(sup, (170, 680))
         # pergamino central
         j = self.j
         card = pygame.Rect(ANCHO // 2 - 240, 40, 720, 530)
+        if self.es_jefe:
+            self._dibujar_jefe(sup, card)
+            return
         ui.tarjeta(sup, card, ui.PERGAMINO, 26, ui.ARENA_OSC, 8)
         if self.gano:
             titulo = "¡Repaso terminado!" if j.practica else "¡Nivel superado!"
@@ -1279,6 +1425,93 @@ class FinNivel(Escena):
             y += s.get_height() + 2
         self.fx.dibujar(sup)
         self.dibujar_botones(sup)
+
+
+    def _dibujar_jefe(self, sup, card):
+        """Pantalla especial: rayos dorados, trofeo, fuegos artificiales y la isla nueva."""
+        j = self.j
+        centro = (card.centerx, card.top + 150)
+        rayos = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        for k in range(16):
+            a = self.t * 0.25 + k * math.tau / 16
+            p1 = (centro[0] + math.cos(a - 0.09) * 900, centro[1] + math.sin(a - 0.09) * 900)
+            p2 = (centro[0] + math.cos(a + 0.09) * 900, centro[1] + math.sin(a + 0.09) * 900)
+            pygame.draw.polygon(rayos, (255, 226, 120, 70), [centro, p1, p2])
+        sup.blit(rayos, (0, 0))
+        ui.tarjeta(sup, card, (255, 244, 214), 26, ui.SOL_OSC, 8)
+        pygame.draw.rect(sup, ui.SOL, card.inflate(-16, -16), 3, border_radius=20)
+        trofeo(sup, (card.centerx, card.top + 10), 92 * rebote(min(1, self.t / 0.6)))
+        t = ui.texto_borde("¡Jefe derrotado!", 54, SOL, BORDE, 5)
+        esc = rebote(min(1, max(0.01, (self.t - 0.15) / 0.5)))
+        t2 = pygame.transform.smoothscale(t, (max(1, int(t.get_width() * esc)), max(1, int(t.get_height() * esc))))
+        sup.blit(t2, t2.get_rect(center=(card.centerx, card.top + 92)))
+        for k in range(3):
+            c = self._pos_estrella(k)
+            ui.estrella(sup, c, 30, (236, 222, 190), (200, 180, 140), brillo=False)
+            if k < self.estrellas_hechas:
+                edad = self.t - (0.6 + k * 0.45)
+                ui.estrella(sup, c, 30 * rebote(min(1, edad / 0.35)), SOL, BORDE)
+        caja = pygame.Rect(card.left + 40, card.top + 228, card.width - 80, 166)
+        if self.nuevo_mundo:
+            nuevo = paisaje.tema(self.nuevo_mundo.id)
+            mini = pygame.Surface(caja.size)
+            arriba, abajo = nuevo["cielo"]
+            for yy in range(caja.height):
+                kk = yy / caja.height
+                pygame.draw.line(mini, [int(a + (b - a) * kk) for a, b in zip(arriba, abajo)], (0, yy), (caja.width, yy))
+            pygame.draw.rect(mini, nuevo["mar"][1], (0, caja.height * 0.58, caja.width, caja.height))
+            paisaje.isla_tema(mini, (caja.width // 2 - 170, 52), 340, 150, nuevo, semilla=3, palmeras=2)
+            sup.blit(mini, caja)
+            pygame.draw.rect(sup, BORDE, caja, 4, border_radius=6)
+            et = ui.texto_borde(f"¡Nueva isla: {nuevo['nombre']}!", 28, CREMA, BORDE, 3)
+            sup.blit(et, et.get_rect(midtop=(caja.centerx, caja.top + 8)))
+            sub = ui.texto_borde(f"{self.nuevo_mundo.nombre}: {self.nuevo_mundo.tema}", 18, SOL, BORDE, 2)
+            sup.blit(sub, sub.get_rect(midbottom=(caja.centerx, caja.bottom - 8)))
+        else:
+            txt = "¡Terminaste Derivia! Ya dominás el cálculo." if j.mundo.id == MUNDOS[-1].id else \
+                "¡Isla completada! Repetí el jefe cuando quieras para mejorar tus estrellas."
+            s = ui.rico(f"**{txt}**", 26, TINTA, ancho=caja.width - 40, centrado=True, color_negrita=ui.CORAL_OSC)
+            sup.blit(s, s.get_rect(center=caja.center))
+        datos = [("Monedas", str(int(self.puntos_vistos))), ("Errores", str(j.errores)),
+                 ("Sin errores", f"{sum(1 for r in j.resultados if r == 'bien')}/{len(j.ejercicios)}")]
+        for k, (a, b_) in enumerate(datos):
+            r = pygame.Rect(card.left + 60 + k * 205, card.top + 410, 190, 56)
+            pygame.draw.rect(sup, (250, 232, 190), r, border_radius=14)
+            pygame.draw.rect(sup, ui.SOL_OSC, r, 2, border_radius=14)
+            sup.blit(ui.texto(a, 15, SUAVE, negrita=True), (r.left + 12, r.top + 5))
+            sup.blit(ui.texto(b_, 22, TINTA, negrita=True), (r.left + 12, r.top + 24))
+            if a == "Monedas":
+                ui.moneda(sup, (r.right - 24, r.centery), 12)
+        msg = ui.rico(f"Ahora tenés **{self.app.progreso.monedas} monedas** para la tienda.", 18, TINTA, ancho=640,
+                      centrado=True, color_negrita=ui.CORAL_OSC)
+        centrar(sup, msg, card.top + 482, card.centerx)
+        self.fx.dibujar(sup)
+        self.dibujar_botones(sup)
+
+
+def trofeo(sup, centro, tam):
+    """Copa dorada."""
+    if tam < 4:
+        return
+    cx, cy = centro
+    k = tam / 90
+    for lado in (-1, 1):
+        asa = pygame.Rect(0, 0, 34 * k, 40 * k)
+        asa.center = (cx + lado * 38 * k, cy + 4 * k)
+        pygame.draw.ellipse(sup, BORDE, asa.inflate(8, 8), max(3, int(10 * k)))
+        pygame.draw.ellipse(sup, SOL, asa, max(2, int(6 * k)))
+    copa = [(cx - 40 * k, cy - 30 * k), (cx + 40 * k, cy - 30 * k), (cx + 30 * k, cy + 18 * k),
+            (cx + 10 * k, cy + 30 * k), (cx - 10 * k, cy + 30 * k), (cx - 30 * k, cy + 18 * k)]
+    pygame.draw.polygon(sup, BORDE, copa, max(3, int(8 * k)))
+    pygame.draw.polygon(sup, SOL, copa)
+    pygame.draw.rect(sup, BORDE, (cx - 8 * k - 3, cy + 28 * k, 16 * k + 6, 18 * k))
+    pygame.draw.rect(sup, ui.SOL_OSC, (cx - 8 * k, cy + 28 * k, 16 * k, 16 * k))
+    base = pygame.Rect(0, 0, 60 * k, 16 * k)
+    base.midtop = (cx, cy + 44 * k)
+    pygame.draw.rect(sup, BORDE, base.inflate(6, 6), border_radius=5)
+    pygame.draw.rect(sup, MADERA, base, border_radius=4)
+    ui.estrella(sup, (cx, cy - 4 * k), 15 * k, (255, 248, 220), BORDE, brillo=False)
+    pygame.draw.line(sup, (255, 240, 180), (cx - 28 * k, cy - 22 * k), (cx - 20 * k, cy + 10 * k), max(2, int(4 * k)))
 
 
 # =============================================================== CUADERNO
@@ -1354,6 +1587,7 @@ class Ayuda(Escena):
         ("e a la algo", "e^(2x)", ["e^(2x)"]),
         ("Logaritmo natural", "ln(x)", ["ln(x)"]),
         ("Raíz cuadrada", "raiz(x)", ["raiz(x)"]),
+        ("Raíz cúbica (o la que sea)", "raiz3(x)", ["raiz3(x)"]),
         ("Fracción", "(x+1)/(x^2+1)", ["(x+1)/(x^2+1)"]),
         ("Seno al cuadrado", "sen(x)^2", ["sen(x)^2"]),
         ("Decimales", "0,5x", ["0,5x"]),
@@ -1655,7 +1889,8 @@ class Tienda(Escena):
         pygame.draw.ellipse(sup, CORAL, (124, 528, 292, 62))
         pygame.draw.ellipse(sup, (255, 170, 150), (150, 538, 240, 42), 4)
         self.gato.dibujar(sup, (270, 566))
-        letrero(sup, (ANCHO // 2 - 230, 16, 460, 64), "Tienda del michi", 30)
+        nombre = self.app.progreso.nombre_gato
+        letrero(sup, (ANCHO // 2 - 250, 16, 500, 64), f"Tienda de {nombre}" if nombre else "Tienda del michi", 30)
         dibujar_monedero(sup, self.prog.monedas, (ANCHO - 92, 22))
         # cartel con el mensaje, arriba del gato
         msg = ui.rico(self.mensaje, 20, TINTA, ancho=380, centrado=True)
@@ -1666,5 +1901,100 @@ class Tienda(Escena):
         # panel de prendas
         panel = pygame.Rect(552, 96, 708, 610)
         ui.tarjeta(sup, panel, ui.PERGAMINO, 24, ui.ARENA_OSC, 6)
+        self.dibujar_botones(sup)
+        self.fx.dibujar(sup)
+
+
+# =============================================================== NOMBRE DEL GATO
+
+class NombreGato(Escena):
+    permite_m = False
+    SUGERENCIAS = ["Mandarina", "Pancho", "Michi", "Tostado", "Derivado", "Sirope"]
+
+    def __init__(self, app, primera_vez=False):
+        super().__init__(app)
+        self.primera_vez = primera_vez
+        self.cielo = paisaje.Cielo(semilla=11)
+        self.mar = paisaje.Mar(470)
+        self.gato = Gato(220)
+        self.gato.reaccionar("sorpresa" if primera_vez else "feliz", 1.5)
+        self.fx = Efectos()
+        self.t = 0.0
+        self.saliendo = None
+        self.campo = CampoTexto((560, 300, 520, 62), al_enter=self.listo, al_cambiar=self._cambio,
+                                placeholder="Nombre del michi", largo_max=14)
+        self.campo.fredoka = True
+        self.campo.poner(app.progreso.nombre_gato or "")
+        pygame.key.start_text_input()
+        self.armar()
+
+    def armar(self):
+        self.botones = []
+        if not self.primera_vez:
+            self.botones.append(Boton((24, 22, 128, 50), "Volver", self.atras, DURAZNO, tam=22))
+        x0 = 560
+        for k, nombre in enumerate(self.SUGERENCIAS):
+            fila, col = divmod(k, 3)
+            self.botones.append(Boton((x0 + col * 176, 400 + fila * 62, 164, 48), nombre,
+                                      (lambda n=nombre: self.campo.poner(n)), ARENA, tam=19, relieve=4, sonido="tecla"))
+        self.boton_listo = Boton((x0 + 90, 548, 340, 66), "¡Listo!", self.listo, CORAL, CREMA, tam=28,
+                                 habilitado=bool(self.campo.texto.strip()))
+        self.botones.append(self.boton_listo)
+
+    def _cambio(self, texto):
+        if hasattr(self, "boton_listo"):
+            self.boton_listo.habilitado = bool(texto.strip())
+        if texto and self.gato.animo == "normal":
+            self.gato.reaccionar("feliz", 0.6, saltar=False)
+
+    def atras(self):
+        if not self.primera_vez:
+            self.app.cambiar(Menu(self.app), "fundido")
+
+    def listo(self):
+        nombre = " ".join(self.campo.texto.split())[:14]
+        if not nombre or self.saliendo is not None:
+            return
+        self.app.progreso.nombre_gato = nombre
+        self.app.progreso.guardar()
+        sonidos.tocar("miau")
+        sonidos.tocar("estrella", 0.6)
+        self.gato.reaccionar("festejo", 2)
+        self.fx.confeti(300, 420, 60, 1.0)
+        self.fx.texto(300, 230, f"¡Hola, {nombre}!", ui.SOL, 40, sube=30, dur=1.6)
+        self.saliendo = 1.4
+
+    def evento(self, e):
+        if self.saliendo is None and self.campo.evento(e):
+            return True
+        return super().evento(e)
+
+    def actualizar(self, dt):
+        self.t += dt
+        self.cielo.actualizar(dt)
+        self.mar.actualizar(dt)
+        self.gato.actualizar(dt)
+        self.fx.actualizar(dt)
+        self.campo.actualizar(dt)
+        if self.saliendo is not None:
+            self.saliendo -= dt
+            if self.saliendo <= 0:
+                self.saliendo = None
+                self.app.cambiar(Menu(self.app), "ola")
+
+    def dibujar(self, sup):
+        self.cielo.dibujar(sup)
+        self.mar.dibujar(sup)
+        paisaje.dibujar_isla(sup, (40, 500), 520, 210, ui.PASTO, semilla=5, palmeras=2)
+        self.gato.dibujar(sup, (300, 640))
+        titulo = "¡Hola! ¿Cómo se llama tu michi?" if self.primera_vez else "¿Cómo se llama tu michi?"
+        t = ui.texto_borde(titulo, 40, SOL, BORDE, 4)
+        sup.blit(t, t.get_rect(midtop=(820, 120 + math.sin(self.t * 1.6) * 4)))
+        sub = ui.texto_borde("Te va a acompañar en todas las islas.", 22, CREMA, BORDE, 2)
+        sup.blit(sub, sub.get_rect(midtop=(820, 186)))
+        rect = pygame.Rect(530, 270, 580, 370)
+        ui.tarjeta(sup, rect, ui.PERGAMINO, 24, ui.ARENA_OSC, 6)
+        self.campo.dibujar(sup)
+        sup.blit(ui.texto("O elegí uno:", 18, SUAVE, negrita=True), (560, 372))
         self.dibujar_botones(sup)
         self.fx.dibujar(sup)

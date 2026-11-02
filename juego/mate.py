@@ -30,6 +30,9 @@ _GLOBALES = {
     "Float": sp.Float,
     "Rational": sp.Rational,
     "Function": sp.Function,
+    "Add": sp.Add,
+    "Mul": sp.Mul,
+    "Pow": sp.Pow,
     "__builtins__": {},
 }
 _LOCALES = {
@@ -83,6 +86,45 @@ def _potencia_de_funcion(s):
         s = s[:m.start()] + f"({m.group(1)}({adentro}))^{m.group(2)}" + s[fin + 1:]
 
 
+def _raices_n(s):
+    """sqrt3(x) -> ((x)^(1/3)): raíz n-ésima (la escribís raiz3(x), raiz4(x), ...)."""
+    patron = re.compile(r"sqrt\s*(\d+)\s*\(")
+    while True:
+        m = patron.search(s)
+        if not m:
+            return s
+        n = int(m.group(1))
+        if n < 2:
+            raise ErrorEntrada("El índice de la raíz tiene que ser 2 o más.")
+        inicio_par = m.end() - 1
+        nivel, fin = 0, None
+        for i in range(inicio_par, len(s)):
+            if s[i] == "(":
+                nivel += 1
+            elif s[i] == ")":
+                nivel -= 1
+                if nivel == 0:
+                    fin = i
+                    break
+        if fin is None:
+            raise ErrorEntrada("Falta cerrar un paréntesis.")
+        s = s[:m.start()] + f"(({s[inicio_par + 1:fin]})^(1/{n}))" + s[fin + 1:]
+
+
+def _evaluar_numeros(e):
+    """Con evaluate=False todo queda 'crudo' (1/3 sale como 1·3⁻¹). Se arma todo normal
+    salvo las sumas, que mantienen el orden en que se escribieron los términos."""
+    if e.is_Atom:
+        return e
+    args = [_evaluar_numeros(a) for a in e.args]
+    if e.is_Add:
+        return sp.Add(*args, evaluate=False)
+    try:
+        return e.func(*args)
+    except Exception:
+        return e
+
+
 def normalizar(texto):
     s = texto.strip().lower()
     for viejo, nuevo in _CARACTERES.items():
@@ -94,11 +136,12 @@ def normalizar(texto):
     return s
 
 
-def parsear(texto, variables=(x,), permitir_c=False):
+def parsear(texto, variables=(x,), permitir_c=False, tal_cual=False):
     """Convierte lo que tipeó en una expresión de SymPy. Lanza ErrorEntrada.
 
     variables: las letras que pueden aparecer (x, y, z). Vacío = tiene que ser un número.
-    permitir_c: acepta la constante de integración C."""
+    permitir_c: acepta la constante de integración C.
+    tal_cual: no reordena ni simplifica (para mostrar lo que escribiste en el mismo orden)."""
     if not texto or not texto.strip():
         raise ErrorEntrada("Todavía no escribiste nada.")
     if len(texto) > 200:
@@ -109,6 +152,7 @@ def parsear(texto, variables=(x,), permitir_c=False):
     if s.count("(") != s.count(")"):
         raise ErrorEntrada("Los paréntesis no están parejos.")
     s = _potencia_de_funcion(s)
+    s = _raices_n(s)
     # separar los nombres de función para que "xcos(x)" sea x·cos(x)
     s = re.sub(rf"({_FUNCIONES})", r" \1 ", s)
     try:
@@ -117,12 +161,12 @@ def parsear(texto, variables=(x,), permitir_c=False):
         if permitir_c:
             locales["c"] = C
         expr = parse_expr(s, local_dict=locales, global_dict=dict(_GLOBALES),
-                          transformations=_TRANSFORMACIONES)
+                          transformations=_TRANSFORMACIONES, evaluate=not tal_cual)
     except Exception:
         raise ErrorEntrada("No entiendo la fórmula. ¿Falta algún paréntesis o un signo?")
     if not isinstance(expr, sp.Basic):
         raise ErrorEntrada("No entiendo la fórmula.")
-    expr = sp.sympify(expr)
+    expr = _evaluar_numeros(expr) if tal_cual else sp.sympify(expr)
     raras = expr.atoms(sp.core.function.AppliedUndef)
     if raras:
         nombre = sorted(str(f.func) for f in raras)[0]
@@ -137,20 +181,24 @@ def parsear(texto, variables=(x,), permitir_c=False):
         nombres = " y ".join(str(v) for v in variables)
         raise ErrorEntrada(f"Usá solo {'la variable' if len(variables) == 1 else 'las variables'} {nombres} "
                            f"(encontré: {', '.join(otras)}).")
-    if expr.has(sp.zoo, sp.nan, sp.oo):
+    if not tal_cual and expr.has(sp.zoo, sp.nan, sp.oo):
         raise ErrorEntrada("Ahí hay una división por cero.")
     return expr
 
 
 # ------------------------------------------------------------ LaTeX lindo
 
-def tex(expr):
-    """LaTeX con la notación de la facultad: sen, tg, ln."""
-    s = sp.latex(sp.sympify(expr), ln_notation=True)
+def tex(expr, tal_cual=False):
+    """LaTeX con la notación de la facultad: sen, tg, ln. tal_cual: respeta el orden de los términos."""
+    if tal_cual:
+        s = sp.latex(expr, ln_notation=True, order="none")
+    else:
+        s = sp.latex(sp.sympify(expr), ln_notation=True)
     s = s.replace(r"\sin", r"\mathrm{sen}").replace(r"\tan", r"\mathrm{tg}")
     s = s.replace(r"\left(", "(").replace(r"\right)", ")")
     s = s.replace(r"\left[", "[").replace(r"\right]", "]")
     s = s.replace(r"\operatorname", r"\mathrm")
+    s = re.sub(r"(?<![\\a-zA-Z])c(?![a-zA-Z])", "C", s)   # la constante de integración, con mayúscula
     # que "y ln(x)" no se lea "yln(x)": espacio fino antes de ln, sen, cos, tg
     s = re.sub(r"(?<=[\w}])\s*(\\(?:ln|cos|log|mathrm\{sen\}|mathrm\{tg\}))", r"\\,\1", s)
     return s

@@ -7,7 +7,7 @@ import random
 import pygame
 
 from . import gato, ui
-from .escenas import Menu
+from .escenas import Menu, NombreGato
 from .fx import suave
 from .progreso import Progreso
 from .sonido import sonidos
@@ -30,7 +30,7 @@ class App:
         self.corriendo = True
         self.transicion = None      # (tipo, foto_vieja, t, duración)
         self.sacudida = 0.0
-        self.escena = Menu(self)
+        self.escena = Menu(self) if p.nombre_gato else NombreGato(self, primera_vez=True)
         sonidos.musica(self.escena.musica)
 
     # ------------------------------------------------ transiciones

@@ -46,13 +46,14 @@ def _monomio(rng, n=None, m=None):
 def _func_parcial(rng, con_trig):
     """Polinomio en x, y con: un término mixto, uno solo-x y uno solo-y."""
     terminos = [_monomio(rng, rng.randint(1, 3), rng.randint(1, 3)),
-                _monomio(rng, rng.randint(1, 4), 0),
-                _monomio(rng, 0, rng.randint(1, 4))]
+                rng.choice([_monomio(rng, rng.randint(1, 4), 0), _monomio(rng, 0, rng.randint(1, 4))])]
+    if rng.random() < 0.4:   # a veces, un tercer término
+        terminos.append(_monomio(rng, rng.randint(1, 3), 0) if terminos[1].has(y) else _monomio(rng, 0, rng.randint(1, 3)))
     if con_trig:
         a = rng.choice([1, 2, 3, -1, -2])
         extra = rng.choice([a * x**rng.randint(1, 2) * SEN(y), a * E(x) * y**rng.randint(1, 2),
                             a * y * COS(x), a * x * E(y), a * LN(x) * y])
-        terminos[rng.randrange(3)] = extra
+        terminos[0] = extra
     rng.shuffle(terminos)
     return terminos
 
@@ -245,8 +246,8 @@ def g_int_tabla(ctx):
 
 def g_int_sumas(ctx):
     rng = ctx.rng
-    terminos = [ti_potencia(rng)] + [g(rng) for g in rng.sample(TABLA_I, 2 if ctx.jefe else 1)]
-    if rng.random() < 0.5:
+    terminos = [ti_potencia(rng), rng.choice(TABLA_I)(rng)]
+    if rng.random() < 0.35:
         terminos.append(ti_constante(rng))
     rng.shuffle(terminos)
     return _ejercicio_suma_int(ctx, terminos)

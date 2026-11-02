@@ -111,6 +111,20 @@ def _diseñar():
     s["desbloqueo"] = _seq(*[_nota(n, 0.07, duty=0.25, vol=0.35, caida=0.3) for n in ("C5", "G5", "C6", "E6")],
                            _nota("G6", 0.4, "triangulo", vol=0.5, caida=0.8))
     s["paso"] = _nota("A5", 0.06, duty=0.25, vol=0.25, caida=0.6)
+    s["trueno"] = _mezclar(_ruido(1.4, vol=0.5, caida=0.5, suavizar=90), _nota(55, 1.0, "triangulo", vol=0.25, caida=0.6))
+    s["fuegos"] = _mezclar(_nota(1800, 0.25, duty=0.125, vol=0.08, caida=0.3, desliza_a=600),
+                           _seq(_silencio(0.22), _ruido(0.35, vol=0.4, caida=1.2, suavizar=8)))
+    melodia = [("G4", .09), ("C5", .09), ("E5", .09), ("G5", .18), ("E5", .09), ("G5", .36),
+               ("A5", .12), ("B5", .12), ("C6", .12), ("D6", .12), ("E6", .7)]
+    voz = _seq(*[_nota(n, d, duty=0.25, vol=0.36, caida=0.45) for n, d in melodia])
+    segunda = _seq(_silencio(0.9), *[_nota(n, .12, duty=0.5, vol=0.15, caida=0.4) for n in ("F5", "G5", "A5", "B5")],
+                   _nota("C6", 0.7, duty=0.5, vol=0.15, caida=0.6))
+    bajo = _seq(*[_nota(n, d, "triangulo", vol=0.5, caida=0.3) for n, d in
+                  [("C3", .27), ("G3", .27), ("C4", .54), ("F3", .24), ("G3", .24), ("C4", .8)]])
+    tambor = _seq(*[_seq(_ruido(0.06, vol=0.3, caida=2.5), _silencio(0.21)) for _ in range(4)],
+                  _seq(*[_seq(_ruido(0.04, vol=0.25, caida=3), _silencio(0.08)) for _ in range(4)]),
+                  _ruido(0.5, vol=0.35, caida=0.8, suavizar=3))
+    s["jefe"] = _mezclar(voz, segunda, bajo, tambor)
     s["tic"] = _nota(1760, 0.025, duty=0.25, vol=0.15, caida=1.0)
     s["salto"] = _nota(300, 0.14, duty=0.25, vol=0.3, caida=0.5, desliza_a=900)
     return s

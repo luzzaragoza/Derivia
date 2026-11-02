@@ -28,6 +28,9 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 - **Ejercicios infinitos**: se generan con números al azar cada vez.
 - **Integrales**: se corrigen derivando tu respuesta, así que vale cualquier primitiva (con o sin `+ C`).
 - **Integrales dobles**: te muestra el dibujo de la región.
+- **Cada mundo es una isla distinta**: de la Isla Serena a la Isla Calavera, cada vez un poco más misteriosas.
+- **Tu michi tiene nombre**: se lo ponés la primera vez (y lo cambiás tocando su cartelito en el menú).
+- **Teclado de fórmulas** con potencias, raíces n-ésimas, + y −; los paréntesis se colorean por pareja.
 - Abajo del cuadro de texto aparece **"Leo: …"** con cómo se entendió lo que escribiste.
 - **Un gato naranja** te acompaña: festeja los aciertos, se pone triste con los errores y te da las pistas.
 - **Mapa de islas**: cada mundo es una isla con un camino de niveles.
@@ -68,6 +71,7 @@ Con Python instalado (paso 1 de arriba), hacé doble clic en **`jugar.bat`**.
 | e a la algo | `e^(2x)`, con paréntesis |
 | logaritmo natural | `ln(x)` |
 | raíz | `raiz(x)` |
+| raíz cúbica (o la que sea) | `raiz3(x)`, `raiz4(x)`, ... |
 | fracción | `(x+1)/(x^2+1)` |
 | seno al cuadrado | `sen(x)^2` o `sen^2(x)` |
 | otras variables | `3x^2y + z` |

@@ -299,11 +299,10 @@ def g_tabla(ctx):
 
 def g_sumas(ctx):
     rng = ctx.rng
-    elegidos = rng.sample(TABLA, 2 if ctx.jefe else 1)
-    terminos = [t_potencia(rng)] + [g(rng) for g in elegidos]
-    extra = rng.choice([t_constante, t_lineal, None])
-    if extra:
-        terminos.append(extra(rng))
+    # 2 o 3 términos (no más: alarga sin enseñar nada nuevo)
+    terminos = [t_potencia(rng), rng.choice(TABLA)(rng)]
+    if rng.random() < 0.35:
+        terminos.append(rng.choice([t_constante, t_lineal])(rng))
     rng.shuffle(terminos)
     return _ejercicio_suma(ctx, terminos)
 
@@ -375,7 +374,9 @@ def g_jefe1(ctx):
     t_raiz = Termino(a * x**p, a * p * x**(p - 1),
                      [(a * p * x**p, "potencia_no_resta"), (a * x**(p - 1), "potencia_no_baja")],
                      "$(x^n)' = n\\,x^{n-1}$")
-    terminos = [t_potencia(rng), t_raiz] + [g(rng) for g in rng.sample(TABLA, 2)]
+    terminos = [t_raiz, rng.choice(TABLA)(rng)]
+    if rng.random() < 0.5:
+        terminos.append(t_potencia(rng))
     rng.shuffle(terminos)
     return _ejercicio_suma(ctx, terminos)
 

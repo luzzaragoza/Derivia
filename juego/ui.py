@@ -564,9 +564,34 @@ class Boton:
 
 
 # ------------------------------------------------------------ cuadro de texto
+COLORES_PARENTESIS = [(24, 124, 140), (206, 78, 64), (70, 148, 72), (200, 130, 20), (140, 90, 200)]
+
+
+def _pares_parentesis(texto):
+    """profundidad de cada paréntesis y a qué índice le hace pareja."""
+    pila, prof, pareja = [], {}, {}
+    for i, ch in enumerate(texto):
+        if ch == "(":
+            prof[i] = len(pila)
+            pila.append(i)
+        elif ch == ")":
+            if pila:
+                j = pila.pop()
+                prof[i] = len(pila)
+                pareja[i], pareja[j] = j, i
+            else:
+                prof[i] = -1
+    for j in pila:
+        prof[j] = -1  # sin cerrar
+    return prof, pareja
+
+
 class CampoTexto:
-    def __init__(self, rect, al_enter=None, al_cambiar=None):
+    def __init__(self, rect, al_enter=None, al_cambiar=None, placeholder="escribí acá…", largo_max=120):
         self.rect = pygame.Rect(rect)
+        self.placeholder = placeholder
+        self.largo_max = largo_max
+        self.fredoka = False      # True: letra redondeada (para nombres, no fórmulas)
         self.texto = ""
         self.cursor = 0
         self.al_enter = al_enter
@@ -594,7 +619,7 @@ class CampoTexto:
         if not self.habilitado:
             return False
         if e.type == pygame.TEXTINPUT:
-            if len(self.texto) < 120:
+            if len(self.texto) < self.largo_max:
                 self.insertar(e.text)
                 from .sonido import sonidos
                 sonidos.tocar("tecla", variar=True)
@@ -653,7 +678,7 @@ class CampoTexto:
             brillo = 0.5 + 0.5 * math.sin(self.t * 3)
             pygame.draw.rect(sup, aclarar(LAVANDA, 0.3 + 0.3 * brillo), r.inflate(10, 10), 4, border_radius=18)
         pygame.draw.rect(sup, borde, r, 3, border_radius=14)
-        f = fuente(26, mono=True)
+        f = fuente(30, negrita=True) if self.fredoka else fuente(26, mono=True)
         interior = self.rect.inflate(-32, 0)
         ancho_cursor = f.size(self.texto[:self.cursor])[0]
         if ancho_cursor - self.desplazamiento > interior.width - 4:
@@ -663,10 +688,27 @@ class CampoTexto:
         clip = sup.get_clip()
         sup.set_clip(interior)
         if self.texto:
+            x0 = interior.left - self.desplazamiento
             s = f.render(self.texto, True, TINTA)
-            sup.blit(s, (interior.left - self.desplazamiento, self.rect.centery - s.get_height() // 2))
+            y0 = self.rect.centery - s.get_height() // 2
+            prof, pareja = _pares_parentesis(self.texto) if not self.fredoka else ({}, {})
+            # resaltar la pareja del paréntesis que está al lado del cursor
+            resaltados = set()
+            for i in (self.cursor - 1, self.cursor):
+                if i in pareja and self.habilitado:
+                    resaltados = {i, pareja[i]}
+                    break
+            sup.blit(s, (x0, y0))
+            negrita = fuente(26, True, mono=True)
+            ancho_car = f.size("(")[0]
+            for i, p in prof.items():
+                color = ROSA_OSC if p < 0 else COLORES_PARENTESIS[p % len(COLORES_PARENTESIS)]
+                xk = x0 + f.size(self.texto[:i])[0]
+                fondo = (255, 230, 150) if i in resaltados else (255, 255, 255)
+                pygame.draw.rect(sup, fondo, (xk, y0 + 2, ancho_car, s.get_height() - 4), border_radius=4)
+                sup.blit(negrita.render(self.texto[i], True, color), (xk, y0))
         else:
-            s = f.render("escribí acá…", True, GRIS)
+            s = f.render(self.placeholder, True, GRIS)
             sup.blit(s, (interior.left, self.rect.centery - s.get_height() // 2))
         if self.habilitado and (self.t % 1.0) < 0.6:
             cx = interior.left + ancho_cursor - self.desplazamiento

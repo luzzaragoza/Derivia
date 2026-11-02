@@ -31,7 +31,7 @@ class Confeti:
             self.vx, self.vy = random.uniform(-40, 40), random.uniform(60, 200)
         else:
             a = random.uniform(-math.pi * 0.95, -math.pi * 0.05)
-            v = random.uniform(200, 520) * fuerza
+            v = random.uniform(180, 460) * fuerza
             self.vx, self.vy = math.cos(a) * v, math.sin(a) * v
         self.ang = random.uniform(0, 360)
         self.vang = random.uniform(-500, 500)
@@ -98,7 +98,7 @@ class TextoFlotante:
         if self.vida <= 0:
             return
         k = self.t / self.dur
-        esc = rebote(min(1, self.t / 0.25))
+        esc = 0.7 + 0.3 * suave(self.t / 0.35)
         s = self.sup
         if esc != 1:
             s = pygame.transform.smoothscale(s, (max(1, int(s.get_width() * esc)), max(1, int(s.get_height() * esc))))
