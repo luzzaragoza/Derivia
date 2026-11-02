@@ -892,7 +892,9 @@ class Juego(Escena):
         cx, ancho = self.cx, self.ancho
         y = 108
         consigna = self.ej.consigna
-        if self.i in self.repasos or self.practica:
+        # solo lo que de verdad viene del cuaderno de errores lleva el cartel
+        del_cuaderno = self.i in self.repasos or (self.practica and self.app.progreso.en_cuaderno(self.ej.clave))
+        if del_cuaderno and not (self.practica and self.mundo is None):   # en el repaso del cuaderno ya lo dice el título
             consigna = "**Repaso del cuaderno** · " + consigna
         s = ui.rico(consigna, 20, SUAVE, ancho=ancho, color_negrita=ui.CORAL_OSC)
         self.capas.append((s, s.get_rect(midtop=(cx, y))))

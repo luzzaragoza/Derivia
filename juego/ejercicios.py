@@ -264,6 +264,16 @@ def t_ln(rng):
 TABLA = [t_sen, t_cos, t_exp, t_ln]
 
 
+def elegir(rng, opciones, peso_trig=0.25):
+    """Como rng.choice, pero el seno y el coseno salen menos (si no, cansan: son dos de cada cuatro
+    funciones de la tabla y aparecían en casi la mitad de los ejercicios)."""
+    def es_trig(o):
+        t = getattr(o, "__name__", None) or str(o)
+        return any(k in t for k in ("sen", "cos", "sin"))
+    pesos = [peso_trig if es_trig(o) else 1.0 for o in opciones]
+    return rng.choices(opciones, weights=pesos)[0]
+
+
 def _ejercicio_suma(ctx, terminos, consigna="Derivá la función:"):
     f = sum(t.expr for t in terminos)
     d = sum(t.d for t in terminos)
@@ -291,7 +301,7 @@ def g_potencia(ctx):
 
 def g_tabla(ctx):
     rng = ctx.rng
-    terminos = [rng.choice(TABLA)(rng)]
+    terminos = [elegir(rng, TABLA)(rng)]
     if rng.random() < 0.5:
         terminos.append(t_potencia(rng))
     rng.shuffle(terminos)
@@ -301,7 +311,7 @@ def g_tabla(ctx):
 def g_sumas(ctx):
     rng = ctx.rng
     # 2 o 3 términos (no más: alarga sin enseñar nada nuevo)
-    terminos = [t_potencia(rng), rng.choice(TABLA)(rng)]
+    terminos = [t_potencia(rng), elegir(rng, TABLA)(rng)]
     if rng.random() < 0.35:
         terminos.append(rng.choice([t_constante, t_lineal])(rng))
     rng.shuffle(terminos)
@@ -375,7 +385,7 @@ def g_jefe1(ctx):
     t_raiz = Termino(a * x**p, a * p * x**(p - 1),
                      [(a * p * x**p, "potencia_no_resta"), (a * x**(p - 1), "potencia_no_baja")],
                      "$(x^n)' = n\\,x^{n-1}$")
-    terminos = [t_raiz, rng.choice(TABLA)(rng)]
+    terminos = [t_raiz, elegir(rng, TABLA)(rng)]
     if rng.random() < 0.5:
         terminos.append(t_potencia(rng))
     rng.shuffle(terminos)
@@ -411,9 +421,10 @@ _TRASC = ["sen", "cos", "exp", "ln"]
 
 def _par_producto(rng):
     if rng.random() < 0.75:
-        a, b = rng.choice(["pot", "poly"]), rng.choice(_TRASC)
+        a, b = elegir(rng, ["pot", "poly"]), elegir(rng, _TRASC)
     else:
-        a, b = rng.sample(_TRASC, 2)
+        a = elegir(rng, _TRASC)
+        b = elegir(rng, [t for t in _TRASC if t != a])
     return a, b
 
 
@@ -421,7 +432,7 @@ def _par_cociente(rng):
     opciones = [("pot", "poly"), ("sen", "pot"), ("exp", "pot"), ("ln", "pot"), ("pot", "exp"),
                 ("poly", "exp"), ("sen", "poly"), ("pot", "ln"), ("cos", "pot"), ("exp", "poly"),
                 ("poly", "pot"), ("pot", "sen"), ("pot", "cos")]
-    return rng.choice(opciones)
+    return elegir(rng, opciones)
 
 
 def _uv(rng, par):
@@ -581,7 +592,7 @@ def _adentro_poly(rng):
 
 
 def _adentro_trasc(rng):
-    return rng.choice([(SEN(x), COS(x)), (COS(x), -SEN(x)), (E(x), E(x)), (LN(x), 1 / x)])
+    return elegir(rng, [(SEN(x), COS(x)), (COS(x), -SEN(x)), (E(x), E(x)), (LN(x), 1 / x)])
 
 
 def _tex_compuesta(af, u):
@@ -623,7 +634,7 @@ def _paso_adentro(ctx, f, u, af):
 def _cadena(ctx, nombres_afuera, adentro):
     rng = ctx.rng
     while True:
-        af = _afuera(rng, rng.choice(nombres_afuera))
+        af = _afuera(rng, elegir(rng, nombres_afuera))
         u, du = adentro(rng)
         if af.nombre == "exp" and u.func == LN or af.nombre == "ln" and u.func == E:
             continue
@@ -708,8 +719,8 @@ def g_cadena_doble(ctx):
     rng = ctx.rng
     prohibidos = {("exp", "ln"), ("ln", "exp"), ("raiz", "pot"), ("pot", "pot"), ("ln", "pot")}
     while True:
-        n1 = rng.choice(["pot", "sen", "cos", "exp", "raiz", "ln"])
-        n2 = rng.choice(["sen", "cos", "exp", "pot"])
+        n1 = elegir(rng, ["pot", "sen", "cos", "exp", "raiz", "ln"])
+        n2 = elegir(rng, ["sen", "cos", "exp", "pot"])
         if (n1, n2) in prohibidos or n1 == n2:
             continue
         af1, af2 = _afuera(rng, n1), _afuera(rng, n2)
@@ -774,11 +785,11 @@ def _item_regla(rng, dificultad):
         caso = rng.randint(0, 4)
         if caso == 0:
             k = rng.choice([2, 3, 4, 5, 7])
-            g = rng.choice(["\\mathrm{sen}(x)", "e^{x}", "\\ln(x)", "\\cos(x)"])
+            g = elegir(rng, ["\\mathrm{sen}(x)", "e^{x}", "\\ln(x)", "\\cos(x)"])
             return (f"{k}\\,{g}", "tabla",
                     f"El {k} es una **constante**: sale afuera. No hace falta la regla del producto.")
         if caso == 1:
-            g = rng.choice(["\\mathrm{sen}^{2}(x)", "\\cos^{3}(x)", "\\ln^{2}(x)"])
+            g = elegir(rng, ["\\mathrm{sen}^{2}(x)", "\\cos^{3}(x)", "\\ln^{2}(x)"])
             return (g, "cadena",
                     "$\\mathrm{sen}^2(x)$ significa $(\\mathrm{sen}\\,x)^2$: es una potencia con una función adentro, o sea, **cadena**.")
         if caso == 2:
@@ -793,7 +804,7 @@ def _item_regla(rng, dificultad):
                 "Son dos funciones distintas de $x$ multiplicándose: producto.")
 
     if tipo == "tabla":
-        t1 = rng.choice([t_potencia, t_sen, t_cos, t_exp, t_ln])(rng)
+        t1 = elegir(rng, [t_potencia, t_sen, t_cos, t_exp, t_ln])(rng)
         t2 = rng.choice([t_potencia, t_constante, t_lineal])(rng)
         return (tex(t1.expr + t2.expr), "tabla",
                 "Es una suma de funciones de la tabla: se deriva término a término, sin reglas especiales.")

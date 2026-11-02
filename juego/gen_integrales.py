@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import sympy as sp
 
-from .ejercicios import (COS, E, LN, RAIZ, SEN, Ejercicio, Opcion, Paso, _afuera, _FORMAS, _forma_tex,
+from .ejercicios import (COS, E, LN, RAIZ, SEN, Ejercicio, elegir, Opcion, Paso, _afuera, _FORMAS, _forma_tex,
                          _pot_tex, paso_derivada, paso_elegir, paso_numero, paso_primitiva)
 from .mate import ERRORES, tex, tex_par, x, y
 
@@ -51,7 +51,7 @@ def _func_parcial(rng, con_trig):
         terminos.append(_monomio(rng, rng.randint(1, 3), 0) if terminos[1].has(y) else _monomio(rng, 0, rng.randint(1, 3)))
     if con_trig:
         a = rng.choice([1, 2, 3, -1, -2])
-        extra = rng.choice([a * x**rng.randint(1, 2) * SEN(y), a * E(x) * y**rng.randint(1, 2),
+        extra = elegir(rng, [a * x**rng.randint(1, 2) * SEN(y), a * E(x) * y**rng.randint(1, 2),
                             a * y * COS(x), a * x * E(y), a * LN(x) * y])
         terminos[0] = extra
     rng.shuffle(terminos)
@@ -106,7 +106,7 @@ def g_parciales(ctx):
 
 def _func_cadena_xy(rng):
     while True:
-        nombre = rng.choice(["exp", "sen", "cos", "ln", "pot", "raiz"])
+        nombre = elegir(rng, ["exp", "sen", "cos", "ln", "pot", "raiz"])
         af = _afuera(rng, nombre)
         if nombre in ("ln", "raiz"):
             u = x**rng.randint(1, 2) + y**rng.randint(1, 2) + rng.randint(0, 3)
@@ -237,7 +237,7 @@ def g_int_potencia(ctx):
 
 def g_int_tabla(ctx):
     rng = ctx.rng
-    terminos = [rng.choice(TABLA_I)(rng)]
+    terminos = [elegir(rng, TABLA_I)(rng)]
     if rng.random() < 0.5:
         terminos.append(ti_potencia(rng))
     rng.shuffle(terminos)
@@ -246,7 +246,7 @@ def g_int_tabla(ctx):
 
 def g_int_sumas(ctx):
     rng = ctx.rng
-    terminos = [ti_potencia(rng), rng.choice(TABLA_I)(rng)]
+    terminos = [ti_potencia(rng), elegir(rng, TABLA_I)(rng)]
     if rng.random() < 0.35:
         terminos.append(ti_constante(rng))
     rng.shuffle(terminos)
@@ -386,7 +386,7 @@ _PROHIBIDOS_SUST = {("ln", "exp"), ("exp", "pot"), ("exp", "raiz"), ("exp", "inv
 def _armar_sust(rng, acomodar):
     while True:
         t, g, nucleo, c = _adentro_sust(rng)
-        h = _afuera_int(rng, rng.choice(["pot", "cos", "sen", "exp", "inv", "raiz"]))
+        h = _afuera_int(rng, elegir(rng, ["pot", "cos", "sen", "exp", "inv", "raiz"]))
         if (t, h.nombre) in _PROHIBIDOS_SUST:
             continue
         if acomodar:
@@ -451,7 +451,7 @@ def g_lineal(ctx):
     """∫ e^{kx}, sen(kx), (ax+b)^n...: se divide por la constante de adentro."""
     rng = ctx.rng
     k = rng.choice([2, 3, 4, 5, -2, -3])
-    tipo = rng.choice(["exp", "sen", "cos", "pot", "inv"])
+    tipo = elegir(rng, ["exp", "sen", "cos", "pot", "inv"])
     b = rng.choice([1, 2, -1, 3, 4]) if tipo in ("pot", "inv") else rng.choice([0, 0, 1, 2, -1, 3])
     u = k * x + b
     h = _afuera_int(rng, tipo)
@@ -490,7 +490,7 @@ def _caso_partes(rng, con_log=False, dificil=False):
     else:
         p = rng.choice([x, x, 2 * x, 3 * x, x + 1, x - 2, x + 3])
     k = rng.choice([1, 1, 2, 3])
-    t = rng.choice([E(k * x), SEN(k * x), COS(k * x)])
+    t = elegir(rng, [E(k * x), SEN(k * x), COS(k * x)])
     return p * t, p, t
 
 
