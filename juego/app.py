@@ -6,7 +6,7 @@ import random
 
 import pygame
 
-from . import ui
+from . import gato, ui
 from .escenas import Menu
 from .fx import suave
 from .progreso import Progreso
@@ -19,17 +19,25 @@ class App:
         self.lienzo = pygame.Surface(pantalla.get_size())
         self.reloj = pygame.time.Clock()
         self.progreso = Progreso()
+        p = self.progreso
         sonidos.iniciar()
-        sonidos.activo = self.progreso.sonido
+        sonidos.poner_efectos(p.sonido)
+        sonidos.musica_activa = p.musica
+        sonidos.poner_volumenes(p.vol_efectos, p.vol_musica)
+        gato.ROPA = tuple(p.ropa_puesta.values())
+        if p.pantalla_completa:
+            self.poner_pantalla_completa(True, guardar=False)
         self.corriendo = True
         self.transicion = None      # (tipo, foto_vieja, t, duración)
         self.sacudida = 0.0
         self.escena = Menu(self)
+        sonidos.musica(self.escena.musica)
 
     # ------------------------------------------------ transiciones
     def cambiar(self, escena, transicion="fundido"):
         foto = self.lienzo.copy()
         self.escena = escena
+        sonidos.musica(getattr(escena, "musica", "isla"))
         if transicion:
             dur = {"fundido": 0.28, "ola": 0.75}.get(transicion, 0.3)
             self.transicion = (transicion, foto, 0.0, dur)
@@ -40,8 +48,20 @@ class App:
         self.sacudida = max(self.sacudida, intensidad)
 
     def alternar_sonido(self):
-        self.progreso.sonido = sonidos.alternar()
+        prendido = sonidos.alternar()
+        self.progreso.sonido = self.progreso.musica = prendido
         self.progreso.guardar()
+
+    def poner_pantalla_completa(self, activa, guardar=True):
+        actual = bool(pygame.display.get_surface().get_flags() & pygame.FULLSCREEN) if pygame.display.get_surface() else False
+        if actual != activa:
+            try:
+                pygame.display.toggle_fullscreen()
+            except pygame.error:
+                pass
+        if guardar:
+            self.progreso.pantalla_completa = activa
+            self.progreso.guardar()
 
     def salir(self):
         self.corriendo = False
@@ -106,8 +126,11 @@ class App:
                     self.corriendo = False
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_m and getattr(self.escena, "permite_m", True):
                     self.alternar_sonido()
+                elif e.type == pygame.KEYDOWN and e.key == pygame.K_F11:
+                    self.poner_pantalla_completa(not self.progreso.pantalla_completa)
                 else:
                     self.escena.evento(e)
+            sonidos.actualizar(dt)
             self.escena.actualizar(dt)
             self.escena.dibujar(self.lienzo)
             self._componer(dt)

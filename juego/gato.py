@@ -19,6 +19,12 @@ ROJO_BOCA = (176, 62, 70)
 LAGRIMA = (120, 196, 240)
 
 _CACHE = {}
+ROPA = ()          # lo que tiene puesto el gato en todo el juego (ids de juego/ropa.py)
+OY = 40            # margen de arriba (para sombreros), en unidades de diseño
+
+
+class _Lienzo:
+    """Lo que necesitan las prendas para dibujarse en el espacio de diseño del gato."""
 
 
 def _rot(p, centro, ang):
@@ -27,19 +33,20 @@ def _rot(p, centro, ang):
     return (centro[0] + x * c - y * s, centro[1] + x * s + y * c)
 
 
-def _render(tam, animo, ojos_cerrados, cola_paso, mirar):
+def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
     """Dibuja el gato a 2x en un espacio de diseño de 200×220 y lo achica (queda suavizado)."""
+    from . import ropa as prendas
     K = tam * 2 / 200
-    OX = 12  # margen a los costados para que la cola y los brazos no se corten
-    W, H = int((200 + 2 * OX) * K), int(222 * K)
+    OX = 30  # margen a los costados para que la cola y los brazos no se corten
+    W, H = int((200 + 2 * OX) * K), int((222 + OY) * K)
     s = pygame.Surface((W, H), pygame.SRCALPHA)
     G = max(2, int(4 * K))  # grosor del contorno
 
     def P(x, y):
-        return ((x + OX) * K, y * K)
+        return ((x + OX) * K, (y + OY) * K)
 
     def R(x, y, w, h):
-        return pygame.Rect(int((x + OX) * K), int(y * K), int(w * K), int(h * K))
+        return pygame.Rect(int((x + OX) * K), int((y + OY) * K), int(w * K), int(h * K))
 
     def elipse(rect, color, contorno=True):
         if contorno:
@@ -66,6 +73,10 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar):
     triste = animo == "triste"
     alegre = animo in ("feliz", "festejo")
     brazos = animo == "festejo"
+    lz = _Lienzo()
+    lz.s, lz.K, lz.G, lz.P, lz.R, lz.elipse, lz.poligono, lz.trazo = s, K, G, P, R, elipse, poligono, trazo
+    lz.triste = triste
+    prendas.dibujar_capa("espalda", ropa, lz)
 
     # ---- cola (atrás de todo)
     ang = math.sin(cola_paso / 16 * math.tau) * (0.5 if alegre else 0.25)
@@ -78,6 +89,8 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar):
     trazo(pts, NARANJA, 10)
     for p in pts[-4:]:
         pygame.draw.circle(s, NARANJA_OSC, P(*p), 10 * K)
+    lz.cola = pts
+    prendas.dibujar_capa("cola", ropa, lz)
     # ---- cuerpo
     elipse(R(46, 118, 108, 94), NARANJA)
     elipse(R(70, 140, 60, 62), CREMA, contorno=False)
@@ -157,15 +170,18 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar):
     # bigotes
     for (x1, y1, x2, y2) in [(56, 100, 22, 94), (56, 107, 24, 110), (144, 100, 178, 94), (144, 107, 176, 110)]:
         pygame.draw.line(s, BORDE, P(x1, y1), P(x2, y2), max(1, int(2 * K)))
+    for capa in ("cuello", "cara", "cabeza"):
+        prendas.dibujar_capa(capa, ropa, lz)
     return pygame.transform.smoothscale(s, (int(W / 2), int(H / 2)))
 
 
-def superficie(tam, animo="normal", ojos_cerrados=False, cola_paso=0, mirar=(0, 0)):
-    clave = (tam, animo, ojos_cerrados, cola_paso % 16, mirar)
+def superficie(tam, animo="normal", ojos_cerrados=False, cola_paso=0, mirar=(0, 0), ropa=None):
+    ropa = tuple(sorted(ROPA if ropa is None else ropa))
+    clave = (tam, animo, ojos_cerrados, cola_paso % 16, mirar, ropa)
     if clave not in _CACHE:
-        if len(_CACHE) > 400:
+        if len(_CACHE) > 500:
             _CACHE.clear()
-        _CACHE[clave] = _render(tam, animo, ojos_cerrados, cola_paso % 16, mirar)
+        _CACHE[clave] = _render(tam, animo, ojos_cerrados, cola_paso % 16, mirar, ropa)
     return _CACHE[clave]
 
 
@@ -182,6 +198,7 @@ class Gato:
         self.salto = 0.0
         self.t_salto = 10.0
         self.sacude = 0.0
+        self.ropa = None        # None = lo que tiene puesto (ROPA); si no, una tupla para probar
 
     def reaccionar(self, animo, dur=1.6, saltar=None):
         self.animo = animo
@@ -212,8 +229,8 @@ class Gato:
             self.salto = 0.0
         self.sacude = max(0.0, self.sacude - dt)
 
-    def dibujar(self, sup, pie, tam=None):
-        """pie = (x, y) del medio de las patas."""
+    def dibujar(self, sup, pie, tam=None, angulo=0.0):
+        """pie = (x, y) del medio de las patas. angulo: para girar en el aire."""
         tam = tam or self.tam
         cola = int(self.t * (14 if self.animo in ("feliz", "festejo") else 7))
         mirar = (0, 0)
@@ -221,7 +238,7 @@ class Gato:
             mirar = (3, -4)
         elif self.animo == "normal":
             mirar = (int(round(math.sin(self.t * 0.5) * 2)), 0)
-        img = superficie(tam, self.animo, self.parpadeando > 0, cola, mirar)
+        img = superficie(tam, self.animo, self.parpadeando > 0, cola, mirar, self.ropa)
         respira = 1 + 0.018 * math.sin(self.t * 2.4)
         estirar = 1.0
         if 0 < self.t_salto < 0.45:
@@ -232,6 +249,10 @@ class Gato:
             img = pygame.transform.smoothscale(img, (w, h))
         dx = math.sin(self.t * 40) * 5 * (self.sacude / 0.4) if self.sacude else 0
         r = img.get_rect(midbottom=(pie[0] + dx, pie[1] - self.salto))
+        if angulo:
+            centro = r.center
+            img = pygame.transform.rotozoom(img, angulo, 1.0)
+            r = img.get_rect(center=centro)
         # sombra en el piso
         sombra = pygame.Surface((int(tam * 0.8), int(tam * 0.14)), pygame.SRCALPHA)
         alfa = int(70 * (1 - min(1, self.salto / (self.tam * 0.3))))
@@ -240,6 +261,7 @@ class Gato:
         sup.blit(img, r)
         # extras
         from . import ui
+        r = pygame.Rect(r.left, r.top + int(OY * tam / 200), r.width, r.height - int(OY * tam / 200))
         if self.animo == "pensando":
             q = ui.texto_borde("?", int(tam * 0.3), (255, 255, 255), BORDE, 3)
             sup.blit(q, q.get_rect(center=(r.right - tam * 0.05, r.top + math.sin(self.t * 4) * 4)))

@@ -5,7 +5,8 @@ import random
 
 import pygame
 
-from . import paisaje, ui
+from . import gato as modulo_gato
+from . import paisaje, ropa, ui
 from .fx import Efectos, Fueguito, rebote, suave
 from .gato import Gato
 from .mate import (C, ERRORES, ErrorEntrada, casi_igual, diagnosticar, diagnosticar_primitiva, equivalentes,
@@ -38,12 +39,24 @@ def letrero(sup, rect, texto_s, tam=26):
     sup.blit(t, t.get_rect(center=rect.center))
 
 
+def dibujar_monedero(sup, monedas, arriba_derecha):
+    """Cartelito de madera con las monedas que tenés."""
+    t = ui.texto_borde(str(monedas), 24, CREMA, MADERA_OSC, 2)
+    r = pygame.Rect(0, 0, t.get_width() + 70, 50)
+    r.topright = arriba_derecha
+    ui.tabla_madera(sup, r, radio=14)
+    ui.moneda(sup, (r.left + 28, r.centery), 15)
+    sup.blit(t, t.get_rect(midleft=(r.left + 50, r.centery)))
+    return r
+
+
 def nombre_corto(m):
     return m.nombre.replace("Mundo ", "")
 
 
 class Escena:
     permite_m = True
+    musica = "isla"
 
     def __init__(self, app):
         self.app = app
@@ -71,14 +84,13 @@ class Escena:
         for b in self.botones:
             b.dibujar(sup)
 
-    def boton_sonido(self, rect):
-        icono = pygame.Surface((40, 34), pygame.SRCALPHA)
-        ui.parlante(icono, (20, 17), 26, BORDE, sonidos.activo)
-        return Boton(rect, icono, self._alternar_sonido, ARENA, relieve=4, sonido=None)
+    def boton_opciones(self, rect):
+        icono = pygame.Surface((40, 40), pygame.SRCALPHA)
+        ui.engranaje(icono, (20, 20), 32, BORDE)
+        return Boton(rect, icono, self.abrir_opciones, ARENA, relieve=4)
 
-    def _alternar_sonido(self):
-        self.app.alternar_sonido()
-        self.armar()
+    def abrir_opciones(self):
+        self.app.cambiar(Opciones(self.app, self), None)
 
     def armar(self):
         pass
@@ -99,13 +111,14 @@ class Menu(Escena):
     def armar(self):
         app = self.app
         n = len(app.progreso.cuaderno)
-        x, y = 690, 250
+        x, y = 690, 236
         self.botones = [
             Boton((x, y, 400, 74), "¡Jugar!", self.jugar, CORAL, CREMA, tam=34, tecla=[pygame.K_RETURN, pygame.K_KP_ENTER]),
-            Boton((x, y + 96, 400, 62), f"Cuaderno de errores ({n})", lambda: app.cambiar(Cuaderno(app)), SOL, tam=24),
-            Boton((x, y + 178, 400, 62), "Cómo escribir fórmulas", lambda: app.cambiar(Ayuda(app)), LAVANDA, tam=24),
-            Boton((x, y + 260, 400, 62), "Salir", app.salir, ARENA, tam=24),
-            self.boton_sonido((ANCHO - 80, ALTO - 74, 56, 50)),
+            Boton((x, y + 92, 400, 56), "Tienda del michi", lambda: app.cambiar(Tienda(app), "ola"), (255, 170, 200), tam=24),
+            Boton((x, y + 162, 400, 56), f"Cuaderno de errores ({n})", lambda: app.cambiar(Cuaderno(app)), SOL, tam=23),
+            Boton((x, y + 232, 400, 56), "Cómo escribir fórmulas", lambda: app.cambiar(Ayuda(app)), LAVANDA, tam=23),
+            Boton((x, y + 302, 193, 56), "Opciones", self.abrir_opciones, ARENA, tam=22),
+            Boton((x + 207, y + 302, 193, 56), "Salir", app.salir, ARENA, tam=22),
         ]
 
     def jugar(self):
@@ -143,6 +156,7 @@ class Menu(Escena):
         sup.blit(titulo, titulo.get_rect(midtop=(430, y)))
         sub = ui.texto_borde("Derivadas e integrales, isla por isla", 26, CREMA, BORDE, 3)
         sup.blit(sub, sub.get_rect(midtop=(430, y + 168)))
+        dibujar_monedero(sup, self.app.progreso.monedas, (ANCHO - 24, 24))
         self.dibujar_botones(sup)
 
 
@@ -178,6 +192,8 @@ class Mapa(Escena):
         self.desliz = None
         self.hover = None
         self.capas = {}
+        self.fx = Efectos()
+        self.arranque = None
         self.armar()
 
     @property
@@ -264,7 +280,7 @@ class Mapa(Escena):
         p = self.app.progreso
         m = self.mundo
         self.botones = [Boton((20, 18, 128, 50), "Menú", self.atras, DURAZNO, tam=22),
-                        self.boton_sonido((ANCHO - 76, 18, 56, 50))]
+                        self.boton_opciones((ANCHO - 76, 18, 56, 50))]
         txt = "Volver a bloquear" if p.todo_desbloqueado else "Desbloquear todo"
         self.botones.append(Boton((ANCHO - 290, 18, 200, 50), txt, self.alternar_todo, ARENA, tam=17))
         for d, x in ((-1, ANCHO // 2 - 360), (1, ANCHO // 2 + 310)):
@@ -319,6 +335,8 @@ class Mapa(Escena):
         return None
 
     def evento(self, e):
+        if self.arranque:
+            return False
         if super().evento(e):
             return True
         if self.desliz:
@@ -332,19 +350,49 @@ class Mapa(Escena):
             i = self._nodo_en(e.pos)
             if i is not None:
                 if self.app.progreso.desbloqueado(self.mundo.id, i):
-                    sonidos.tocar("click")
-                    self.app.cambiar(Juego(self.app, self.mundo.id, i), "ola")
+                    self.arrancar(i)
                 else:
                     sonidos.tocar("mal", 0.5)
                     self.gato.reaccionar("triste", 0.8)
                 return True
         return False
 
+    def arrancar(self, i):
+        """El gato salta al nivel, gira y suena la fanfarria; después arranca."""
+        nx, ny = self.nodos[i]
+        if self.gato_nodo is not None:
+            gx, gy = self.nodos[self.gato_nodo]
+            desde = (gx - 58, gy + 30)
+        else:
+            desde = (nx - 58, ny + 30)
+        self.arranque = dict(t=0.0, i=i, desde=desde, hasta=(nx, ny - 22), festejo=False, listo=False)
+        self.hover = None
+        sonidos.tocar("salto")
+        sonidos.tocar("inicio")
+        sonidos.agachar(1.8)
+        self.gato.reaccionar("feliz", 3, saltar=False)
+
     def actualizar(self, dt):
         self.t += dt
         self.cielo.actualizar(dt)
         self.mar.actualizar(dt)
         self.gato.actualizar(dt)
+        self.fx.actualizar(dt)
+        a = self.arranque
+        if a:
+            a["t"] += dt
+            if a["t"] >= 0.42 and not a["festejo"]:
+                a["festejo"] = True
+                nx, ny = self.nodos[a["i"]]
+                self.fx.confeti(nx, ny - 30, 50, 1.1)
+                self.fx.chispas(nx, ny, 20, ui.SOL, 320)
+                nivel = self.mundo.niveles[a["i"]]
+                rotulo = "¡Jefe!" if nivel.jefe else f"¡Nivel {a['i'] + 1}!"
+                self.fx.texto(nx, ny - 150, rotulo, SOL, 46, sube=30, dur=1.1)
+                self.gato.reaccionar("festejo", 3)
+            if a["t"] >= 1.3 and not a["listo"]:
+                a["listo"] = True
+                self.app.cambiar(Juego(self.app, self.mundo.id, a["i"]), "ola")
         if self.desliz:
             self.desliz[0] += dt / 0.5
             if self.desliz[0] >= 1:
@@ -397,8 +445,18 @@ class Mapa(Escena):
         else:
             sup.blit(self._capa(self.sel), (0, 0))
             m = self.mundo
-            # anillo que late en el nivel actual
-            if self.gato_nodo is not None:
+            a = self.arranque
+            if a:
+                nx, ny = self.nodos[a["i"]]
+                r = 44 + 10 * abs(math.sin(a["t"] * 9))
+                pygame.draw.circle(sup, SOL, (nx, ny), r, 6)
+                k = suave(min(1.0, a["t"] / 0.42))
+                x = a["desde"][0] + (a["hasta"][0] - a["desde"][0]) * k
+                y = a["desde"][1] + (a["hasta"][1] - a["desde"][1]) * k - math.sin(k * math.pi) * 120
+                giro = 360 * suave((a["t"] - 0.5) / 0.45) if a["t"] > 0.5 else 0
+                self.gato.dibujar(sup, (x, y), angulo=-giro)
+            elif self.gato_nodo is not None:
+                # anillo que late en el nivel actual
                 nx, ny = self.nodos[self.gato_nodo]
                 r = (40 if m.niveles[self.gato_nodo].jefe else 32) + 6 + 4 * math.sin(self.t * 4)
                 pygame.draw.circle(sup, CREMA, (nx, ny), r, 4)
@@ -422,8 +480,9 @@ class Mapa(Escena):
         for b in self.botones:
             if getattr(b, "ficha", None) == self.sel:
                 pygame.draw.rect(sup, CREMA, b.rect.inflate(10, 12).move(0, 2), 3, border_radius=16)
-        if self.hover is not None and not self.desliz:
+        if self.hover is not None and not self.desliz and not self.arranque:
             self._tooltip(sup, self.hover)
+        self.fx.dibujar(sup)
 
 
 # =============================================================== JUEGO
@@ -437,6 +496,8 @@ X_GLOBO = 196
 
 
 class Juego(Escena):
+    musica = "estudio"
+
     def __init__(self, app, mundo_id, nivel_idx, practica=None):
         super().__init__(app)
         self.practica = practica is not None
@@ -560,7 +621,8 @@ class Juego(Escena):
 
     def armar(self):
         """Calcula la ubicación de todo según el estado actual."""
-        self.botones = [Boton((14, 10, 108, 44), "Salir", self.atras, DURAZNO, tam=19, relieve=4)]
+        self.botones = [Boton((14, 10, 108, 44), "Salir", self.atras, DURAZNO, tam=19, relieve=4),
+                        self.boton_opciones((130, 10, 48, 44))]
         self.capas = []
         if self.ej.grafico:
             self.cx, self.ancho = 480, 860
@@ -953,8 +1015,8 @@ class Juego(Escena):
         r = pygame.Rect(-10, -10, ANCHO + 20, 74)
         ui.tabla_madera(sup, r, radio=0)
         t = ui.texto_borde(self.titulo, 24, CREMA, MADERA_OSC, 2)
-        sup.blit(t, (138, 32 - t.get_height() // 2))
-        x = 138 + t.get_width() + 12
+        sup.blit(t, (192, 32 - t.get_height() // 2))
+        x = 192 + t.get_width() + 12
         if self.jefe:
             et = ui.texto_borde("JEFE", 16, CREMA, ui.CORAL_OSC, 2)
             rr = pygame.Rect(x, 18, et.get_width() + 18, 28)
@@ -1061,6 +1123,7 @@ class Juego(Escena):
                     b.dibujar(sup)
         self._dibujar_encabezado(sup)
         self.botones[0].dibujar(sup)
+        self.botones[1].dibujar(sup)
         self.fx.dibujar(sup)
 
 
@@ -1081,6 +1144,8 @@ class FinNivel(Escena):
         self.estrellas_hechas = 0
         self.puntos_vistos = 0
         self.ultimo_tic = 0
+        app.progreso.sumar_monedas(juego.puntos)
+        sonidos.agachar(2.5)
         if gano:
             self.gato.reaccionar("festejo", 99)
             self.gato.animo_base = "feliz"
@@ -1200,6 +1265,8 @@ class FinNivel(Escena):
                 ui.moneda(sup, (caja.right - 26, caja.centery), 14)
         y += 150
         mensajes = []
+        if j.puntos:
+            mensajes.append(f"Ahora tenés **{self.app.progreso.monedas} monedas** para gastar en la tienda del michi.")
         if self.nuevo_mundo:
             mensajes.append(f"¡Desbloqueaste el **{self.nuevo_mundo.nombre}: {self.nuevo_mundo.tema}**!")
         if j.al_cuaderno:
@@ -1342,3 +1409,262 @@ class Ayuda(Escena):
         sup.blit(cuerpo, (caja.left + 22, caja.top + 18))
         self.gato.dibujar(sup, (1110, ALTO - 12))
         self.dibujar_botones(sup)
+
+
+# =============================================================== OPCIONES
+
+class Opciones(Escena):
+    """Se abre encima de la pantalla en la que estabas (la deja en pausa)."""
+
+    def __init__(self, app, previa):
+        super().__init__(app)
+        self.previa = previa
+        self.musica = getattr(previa, "musica", "isla")
+        self.foto = app.lienzo.copy()
+        velo = pygame.Surface(self.foto.get_size(), pygame.SRCALPHA)
+        velo.fill((40, 30, 40, 140))
+        self.foto.blit(velo, (0, 0))
+        self.t = 0.0
+        p = app.progreso
+        self.panel = pygame.Rect(ANCHO // 2 - 300, 96, 600, 540)
+        x, y = self.panel.left + 50, self.panel.top + 110
+        self.controles = [
+            ui.Interruptor((x + 380, y, 110, 40), p.musica, self.poner_musica),
+            ui.Deslizador((x + 20, y + 66, 470, 14), p.vol_musica, self.vol_musica),
+            ui.Interruptor((x + 380, y + 120, 110, 40), p.sonido, self.poner_efectos),
+            ui.Deslizador((x + 20, y + 186, 470, 14), p.vol_efectos, self.vol_efectos),
+            ui.Interruptor((x + 380, y + 240, 110, 40), p.pantalla_completa, self.poner_pantalla),
+        ]
+        self.botones = [Boton((self.panel.centerx - 110, self.panel.bottom - 86, 220, 58), "Listo", self.atras,
+                              CORAL, CREMA, tam=24, tecla=[pygame.K_RETURN, pygame.K_KP_ENTER])]
+        self._habilitar()
+
+    def _habilitar(self):
+        self.controles[1].habilitado = self.app.progreso.musica
+        self.controles[3].habilitado = self.app.progreso.sonido
+
+    def poner_musica(self, v):
+        self.app.progreso.musica = v
+        sonidos.poner_musica(v)
+        self.app.progreso.guardar()
+        self._habilitar()
+
+    def poner_efectos(self, v):
+        self.app.progreso.sonido = v
+        sonidos.poner_efectos(v)
+        self.app.progreso.guardar()
+        self._habilitar()
+
+    def vol_musica(self, v):
+        self.app.progreso.vol_musica = v
+        sonidos.poner_volumenes(musica=v)
+        self.app.progreso.guardar()
+
+    def vol_efectos(self, v):
+        self.app.progreso.vol_efectos = v
+        sonidos.poner_volumenes(efectos=v)
+        self.app.progreso.guardar()
+
+    def poner_pantalla(self, v):
+        self.app.poner_pantalla_completa(v)
+
+    def atras(self):
+        self.app.cambiar(self.previa, None)
+
+    def evento(self, e):
+        for c in self.controles:
+            if c.evento(e):
+                return True
+        return super().evento(e)
+
+    def actualizar(self, dt):
+        self.t += dt
+
+    def dibujar(self, sup):
+        sup.blit(self.foto, (0, 0))
+        k = rebote(min(1.0, self.t / 0.3))
+        panel = self.panel.move(0, int((1 - k) * 60))
+        ui.tarjeta(sup, panel, ui.PERGAMINO, 26, ui.ARENA_OSC, 8)
+        letrero(sup, (panel.centerx - 160, panel.top - 26, 320, 64), "Opciones", 30)
+        x, y = panel.left + 50, panel.top + 110
+        filas = [("Música", y), ("Efectos de sonido", y + 120), ("Pantalla completa  (F11)", y + 240)]
+        for txt, yy in filas:
+            sup.blit(ui.texto(txt, 26, TINTA, negrita=True), (x, yy + 4))
+        icono_m = pygame.Rect(x + 300, y + 2, 36, 36)
+        ui.parlante(sup, (icono_m.centerx, icono_m.centery), 30, SUAVE, self.app.progreso.musica)
+        sup.blit(ui.texto("La tecla M silencia todo de una.", 17, SUAVE), (x, y + 300))
+        dy = int((1 - k) * 60)
+        for c in self.controles:
+            c.rect.move_ip(0, dy)
+            c.dibujar(sup)
+            c.rect.move_ip(0, -dy)
+        self.dibujar_botones(sup)
+
+
+# =============================================================== TIENDA DEL MICHI
+
+class Tienda(Escena):
+    def __init__(self, app):
+        super().__init__(app)
+        self.cielo = paisaje.Cielo(semilla=8, nubes=4)
+        self.mar = paisaje.Mar(400)
+        self.gato = Gato(250)
+        self.gato.reaccionar("feliz", 1.2)
+        self.fx = Efectos()
+        self.lugar = "cabeza"
+        self.sel = None
+        self.t = 0.0
+        self.mensaje = "¡Elegí algo para probarle!"
+        self.armar()
+
+    @property
+    def prog(self):
+        return self.app.progreso
+
+    def atras(self):
+        self.app.cambiar(Menu(self.app), "ola")
+
+    def _puesta(self):
+        return dict(self.prog.ropa_puesta)
+
+    def _sincronizar(self):
+        modulo_gato.ROPA = tuple(self.prog.ropa_puesta.values())
+
+    def _probando(self):
+        puesta = self._puesta()
+        if self.sel:
+            puesta[ropa.POR_ID[self.sel].lugar] = self.sel
+        return tuple(puesta.values())
+
+    def _tarjeta(self, p, w, h):
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        img = modulo_gato.superficie(84, "normal", ropa=(p.id,))
+        s.blit(img, img.get_rect(midtop=(w // 2, -8)))
+        nombre = ui.escalar_a(ui.texto(p.nombre, 15, TINTA, negrita=True), w - 8)
+        s.blit(nombre, nombre.get_rect(midtop=(w // 2, h - 46)))
+        if self.prog.ropa_puesta.get(p.lugar) == p.id:
+            et = ui.texto("¡Puesto!", 16, MENTA_OSC, negrita=True)
+            s.blit(et, et.get_rect(midtop=(w // 2, h - 24)))
+        elif p.id in self.prog.ropa_comprada:
+            et = ui.texto("Es tuyo", 16, ui.LAVANDA_OSC, negrita=True)
+            s.blit(et, et.get_rect(midtop=(w // 2, h - 24)))
+        else:
+            et = ui.texto(str(p.precio), 17, ui.SOL_OSC if self.prog.monedas >= p.precio else SUAVE, negrita=True)
+            ancho = et.get_width() + 24
+            x = w // 2 - ancho // 2
+            ui.moneda(s, (x + 8, h - 14), 9)
+            s.blit(et, (x + 22, h - 24))
+        return s
+
+    def armar(self):
+        self.botones = [Boton((24, 22, 128, 50), "Menú", self.atras, DURAZNO, tam=22),
+                        self.boton_opciones((ANCHO - 76, 22, 56, 50))]
+        x0 = 572
+        for k, (clave, nombre) in enumerate(ropa.LUGARES):
+            self.botones.append(Boton((x0 + k * 134, 112, 124, 46), nombre, (lambda c=clave: self.elegir_lugar(c)),
+                                      SOL if clave == self.lugar else ARENA, tam=19, relieve=4, sonido="tecla"))
+        items = [p for p in ropa.CATALOGO if p.lugar == self.lugar]
+        w, h = 150, 150
+        for k, p in enumerate(items):
+            fila, col = divmod(k, 4)
+            rect = (x0 + col * (w + 14), 182 + fila * (h + 16), w, h)
+            puesto = self.prog.ropa_puesta.get(p.lugar) == p.id
+            color = (226, 246, 210) if puesto else ((255, 236, 196) if p.id == self.sel else TARJETA)
+            b = Boton(rect, self._tarjeta(p, w - 12, h - 12), (lambda pid=p.id: self.tocar(pid)), color,
+                      radio=16, relieve=5, sonido="tecla")
+            self.botones.append(b)
+        # botón de acción debajo del gato
+        if self.sel:
+            p = ropa.POR_ID[self.sel]
+            if p.id not in self.prog.ropa_comprada:
+                alcanza = self.prog.monedas >= p.precio
+                self.botones.append(Boton((90, 602, 380, 64), f"Comprar · {p.precio}", self.comprar, CORAL, CREMA,
+                                          tam=26, habilitado=alcanza, sonido=None))
+        if self.prog.ropa_puesta:
+            self.botones.append(Boton((180, 676, 200, 38), "Sacarle todo", self.sacar_todo, ARENA, tam=16, relieve=4))
+
+    def elegir_lugar(self, clave):
+        self.lugar = clave
+        self.armar()
+
+    def tocar(self, pid):
+        p = ropa.POR_ID[pid]
+        if pid in self.prog.ropa_comprada:
+            if self.prog.ropa_puesta.get(p.lugar) == pid:
+                self.prog.poner(p.lugar, None)
+                self.mensaje = f"Le sacaste: {p.nombre}"
+                self.gato.reaccionar("sorpresa", 0.8, saltar=False)
+            else:
+                self.prog.poner(p.lugar, pid)
+                self.mensaje = f"¡Le pusiste: {p.nombre}!"
+                self.gato.reaccionar("feliz", 1.0)
+                sonidos.tocar("estrella", 0.6)
+            self.sel = None
+            self._sincronizar()
+        else:
+            self.sel = pid
+            faltan = p.precio - self.prog.monedas
+            self.mensaje = (f"Probándose: {p.nombre}" if faltan <= 0
+                            else f"Te faltan {faltan} monedas para: {p.nombre}")
+            self.gato.reaccionar("sorpresa" if faltan > 0 else "feliz", 0.9, saltar=faltan <= 0)
+        self.armar()
+
+    def comprar(self):
+        p = ropa.POR_ID[self.sel]
+        if self.prog.comprar(p.id, p.precio):
+            self.prog.poner(p.lugar, p.id)
+            self._sincronizar()
+            sonidos.tocar("desbloqueo")
+            sonidos.tocar("miau")
+            sonidos.agachar(1.2)
+            self.fx.confeti(270, 420, 60, 1.2)
+            self.fx.chispas(270, 460, 24, ui.SOL, 340)
+            self.fx.texto(270, 330, f"−{p.precio}", ui.SOL, 40)
+            self.gato.reaccionar("festejo", 2.0)
+            self.mensaje = f"¡Compraste: {p.nombre}!"
+            self.sel = None
+        else:
+            sonidos.tocar("mal")
+        self.armar()
+
+    def sacar_todo(self):
+        for lugar in list(self.prog.ropa_puesta):
+            self.prog.poner(lugar, None)
+        self.sel = None
+        self._sincronizar()
+        self.mensaje = "¡Al natural!"
+        self.armar()
+
+    def actualizar(self, dt):
+        self.t += dt
+        self.cielo.actualizar(dt)
+        self.mar.actualizar(dt)
+        self.gato.actualizar(dt)
+        self.fx.actualizar(dt)
+        self.gato.ropa = self._probando() if self.sel else None
+
+    def dibujar(self, sup):
+        self.cielo.dibujar(sup, sol=False)
+        self.mar.dibujar(sup)
+        # playa
+        pts = [(0, ALTO)] + [(x, 520 + 10 * math.sin(x / 70 + 1)) for x in range(0, 561, 20)] + [(560, ALTO)]
+        pygame.draw.polygon(sup, ui.ARENA, pts)
+        pygame.draw.lines(sup, ui.ESPUMA, False, pts[1:-1], 5)
+        # alfombrita y gato
+        pygame.draw.ellipse(sup, BORDE, (120, 528, 300, 70))
+        pygame.draw.ellipse(sup, CORAL, (124, 528, 292, 62))
+        pygame.draw.ellipse(sup, (255, 170, 150), (150, 538, 240, 42), 4)
+        self.gato.dibujar(sup, (270, 566))
+        letrero(sup, (ANCHO // 2 - 230, 16, 460, 64), "Tienda del michi", 30)
+        dibujar_monedero(sup, self.prog.monedas, (ANCHO - 92, 22))
+        # cartel con el mensaje, arriba del gato
+        msg = ui.rico(self.mensaje, 20, TINTA, ancho=380, centrado=True)
+        caja = pygame.Rect(0, 0, 420, msg.get_height() + 28)
+        caja.midtop = (270, 100)
+        ui.globo(sup, caja, (330, 200), TARJETA)
+        sup.blit(msg, msg.get_rect(center=caja.center))
+        # panel de prendas
+        panel = pygame.Rect(552, 96, 708, 610)
+        ui.tarjeta(sup, panel, ui.PERGAMINO, 24, ui.ARENA_OSC, 6)
+        self.dibujar_botones(sup)
+        self.fx.dibujar(sup)

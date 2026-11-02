@@ -41,7 +41,14 @@ class Progreso:
         self.niveles = {}          # "1-0": {"estrellas": 3, "puntos": 120}
         self.cuaderno = []         # [{"clave": {...}, "formula": "...", "repasos": 0}]
         self.todo_desbloqueado = False
-        self.sonido = True
+        self.sonido = True               # efectos
+        self.musica = True
+        self.vol_efectos = 0.6
+        self.vol_musica = 0.5
+        self.pantalla_completa = False
+        self.monedas = 0
+        self.ropa_comprada = []          # ids de la tienda
+        self.ropa_puesta = {}            # lugar -> id
         self.cargar()
 
     # ------------------------------------------------ disco
@@ -54,10 +61,24 @@ class Progreso:
         self.cuaderno = datos.get("cuaderno", [])
         self.todo_desbloqueado = datos.get("todo_desbloqueado", False)
         self.sonido = datos.get("sonido", True)
+        self.musica = datos.get("musica", True)
+        self.vol_efectos = datos.get("vol_efectos", 0.6)
+        self.vol_musica = datos.get("vol_musica", 0.5)
+        self.pantalla_completa = datos.get("pantalla_completa", False)
+        if "monedas" in datos:
+            self.monedas = datos["monedas"]
+        else:
+            # de regalo: lo que sumaste en tus mejores partidas antes de que existiera la tienda
+            self.monedas = sum(n.get("puntos", 0) for n in self.niveles.values())
+        self.ropa_comprada = datos.get("ropa_comprada", [])
+        self.ropa_puesta = datos.get("ropa_puesta", {})
 
     def guardar(self):
         datos = {"niveles": self.niveles, "cuaderno": self.cuaderno,
-                 "todo_desbloqueado": self.todo_desbloqueado, "sonido": self.sonido}
+                 "todo_desbloqueado": self.todo_desbloqueado, "sonido": self.sonido, "musica": self.musica,
+                 "vol_efectos": self.vol_efectos, "vol_musica": self.vol_musica,
+                 "pantalla_completa": self.pantalla_completa, "monedas": self.monedas,
+                 "ropa_comprada": self.ropa_comprada, "ropa_puesta": self.ropa_puesta}
         tmp = self.archivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
         tmp.replace(self.archivo)
@@ -123,3 +144,23 @@ class Progreso:
 
     def en_cuaderno(self, clave):
         return self._buscar(clave) is not None
+
+    # ------------------------------------------------ monedas y tienda
+    def sumar_monedas(self, n):
+        self.monedas += max(0, int(n))
+        self.guardar()
+
+    def comprar(self, item_id, precio):
+        if item_id in self.ropa_comprada or self.monedas < precio:
+            return False
+        self.monedas -= precio
+        self.ropa_comprada.append(item_id)
+        self.guardar()
+        return True
+
+    def poner(self, lugar, item_id):
+        if item_id is None:
+            self.ropa_puesta.pop(lugar, None)
+        else:
+            self.ropa_puesta[lugar] = item_id
+        self.guardar()

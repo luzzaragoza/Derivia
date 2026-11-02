@@ -31,8 +31,13 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 - Abajo del cuadro de texto aparece **"Leo: …"** con cómo se entendió lo que escribiste.
 - **Un gato naranja** te acompaña: festeja los aciertos, se pone triste con los errores y te da las pistas.
 - **Mapa de islas**: cada mundo es una isla con un camino de niveles.
-- **Sonidos 8-bit** (se prenden y apagan con la tecla **M** o con el botón del parlante), confeti, monedas que vuelan,
-  racha con fueguito y transiciones con olas.
+- **Tienda del michi**: las monedas que ganás en los niveles se guardan y sirven para comprarle ropa al gato
+  (sombreros, pelucas, anteojos, collares, capa, alitas...). Lo que le ponés lo lleva en todo el juego.
+- **Música de fondo** tranquila y **sonidos 8-bit**. En **Opciones** (el engranaje) se prenden, apagan y ajustan
+  por separado; la tecla **M** silencia todo.
+- Confeti, monedas que vuelan, racha con fueguito, transiciones con olas y una fanfarria con el gato saltando
+  cuando arrancás un nivel.
+- **Pantalla completa** con **F11** (o desde Opciones). Al agrandar la ventana la imagen se suaviza en vez de pixelarse.
 
 ## Cómo jugar en Windows
 

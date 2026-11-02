@@ -20,6 +20,9 @@ def _icono():
 
 def main():
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+    # al agrandar la ventana o en pantalla completa: suavizar en vez de pixelar
+    os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "best")
+    os.environ.setdefault("SDL_HINT_RENDER_SCALE_QUALITY", "best")
     import pygame
 
     pygame.mixer.pre_init(22050, -16, 1, 512)

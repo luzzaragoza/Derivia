@@ -749,3 +749,93 @@ def grafico(spec, tam=300):
     tarjeta.blit(img, (8, 6))
     _CACHE_GRAF[clave] = tarjeta
     return tarjeta
+
+
+# ------------------------------------------------------------ controles de opciones
+def engranaje(sup, centro, tam, color=BORDE):
+    cx, cy = centro
+    r_ext, r_int = tam * 0.5, tam * 0.36
+    pts = []
+    for k in range(32):
+        a = k * math.tau / 32
+        r = r_ext if (k // 2) % 2 == 0 else r_int
+        pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
+    pygame.draw.polygon(sup, color, pts)
+    pygame.draw.circle(sup, color, (cx, cy), r_int)
+    pygame.draw.circle(sup, ARENA, (cx, cy), tam * 0.16)
+
+
+class Interruptor:
+    """Switch de prendido/apagado."""
+
+    def __init__(self, rect, valor, al_cambiar):
+        self.rect = pygame.Rect(rect)
+        self.valor = valor
+        self.al_cambiar = al_cambiar
+        self.anim = 1.0 if valor else 0.0
+
+    def evento(self, e):
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect.inflate(10, 10).collidepoint(e.pos):
+            self.valor = not self.valor
+            from .sonido import sonidos
+            sonidos.tocar("click")
+            self.al_cambiar(self.valor)
+            return True
+        return False
+
+    def dibujar(self, sup):
+        objetivo = 1.0 if self.valor else 0.0
+        self.anim += (objetivo - self.anim) * 0.3
+        r = self.rect
+        color = tuple(int(a + (b - a) * self.anim) for a, b in zip((214, 200, 180), PASTO))
+        pygame.draw.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
+        pygame.draw.rect(sup, color, r, border_radius=r.height)
+        x = r.left + r.height / 2 + self.anim * (r.width - r.height)
+        pygame.draw.circle(sup, BORDE, (x, r.centery + 2), r.height / 2 + 1)
+        pygame.draw.circle(sup, TARJETA, (x, r.centery), r.height / 2 - 2)
+        t = texto("SÍ" if self.valor else "NO", 14, BORDE, negrita=True)
+        tx = r.left + 12 if self.valor else r.right - 12 - t.get_width()
+        sup.blit(t, (tx, r.centery - t.get_height() // 2))
+
+
+class Deslizador:
+    """Barrita para el volumen (0 a 1)."""
+
+    def __init__(self, rect, valor, al_cambiar):
+        self.rect = pygame.Rect(rect)
+        self.valor = valor
+        self.al_cambiar = al_cambiar
+        self.arrastrando = False
+        self.habilitado = True
+
+    def _poner(self, x):
+        self.valor = max(0.0, min(1.0, (x - self.rect.left) / self.rect.width))
+        self.al_cambiar(self.valor)
+
+    def evento(self, e):
+        if not self.habilitado:
+            return False
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.rect.inflate(20, 30).collidepoint(e.pos):
+            self.arrastrando = True
+            self._poner(e.pos[0])
+            return True
+        if e.type == pygame.MOUSEMOTION and self.arrastrando:
+            self._poner(e.pos[0])
+            return True
+        if e.type == pygame.MOUSEBUTTONUP and e.button == 1 and self.arrastrando:
+            self.arrastrando = False
+            from .sonido import sonidos
+            sonidos.tocar("moneda", 0.6)
+            return True
+        return False
+
+    def dibujar(self, sup):
+        r = self.rect
+        pygame.draw.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)
+        pygame.draw.rect(sup, (236, 222, 196), r, border_radius=r.height)
+        lleno = pygame.Rect(r.left, r.top, max(r.height, int(r.width * self.valor)), r.height)
+        pygame.draw.rect(sup, MAR if self.habilitado else GRIS, lleno, border_radius=r.height)
+        x = r.left + r.width * self.valor
+        pygame.draw.circle(sup, BORDE, (x, r.centery + 2), r.height + 3)
+        pygame.draw.circle(sup, SOL if self.habilitado else GRIS, (x, r.centery), r.height + 1)
+        pygame.draw.circle(sup, aclarar(SOL, 0.6), (x - 3, r.centery - 3), 3)

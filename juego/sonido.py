@@ -116,31 +116,123 @@ def _diseñar():
     return s
 
 
+# ------------------------------------------------------------ música de fondo
+
+def _colocar(buf, inicio, onda):
+    a = int(inicio * FS)
+    b = min(len(buf), a + len(onda))
+    if a < len(buf):
+        buf[a:b] += onda[:b - a]
+
+
+def _pista(bpm, compases, acordes, melodia=(), arpegio_vol=0.07, bajo_vol=0.32, mel_vol=0.16, shaker=0.025,
+           campanitas=()):
+    """Arma un loop chiptune. acordes: [(raíz_bajo, [notas del arpegio]), ...] (uno por compás)."""
+    pulso = 60 / bpm
+    total = compases * 4 * pulso
+    buf = np.zeros(int(total * FS) + 1)
+    for c in range(compases):
+        raiz, notas = acordes[c % len(acordes)]
+        t0 = c * 4 * pulso
+        quinta = NOTAS[raiz] * 1.5
+        _colocar(buf, t0, _nota(raiz, pulso * 1.6, "triangulo", vol=bajo_vol, caida=0.35))
+        _colocar(buf, t0 + 2 * pulso, _nota(quinta, pulso * 1.6, "triangulo", vol=bajo_vol * 0.8, caida=0.35))
+        if arpegio_vol:
+            secuencia = notas + notas[-2:0:-1]
+            for k in range(8):
+                n = secuencia[k % len(secuencia)]
+                _colocar(buf, t0 + k * pulso / 2, _nota(n, pulso * 0.45, duty=0.125, vol=arpegio_vol, caida=0.9))
+        if shaker:
+            for k in range(4):
+                _colocar(buf, t0 + (k + 0.5) * pulso, _ruido(0.05, vol=shaker, caida=3.0))
+    t = 0.0
+    for nota, beats in melodia:
+        if nota:
+            onda = _nota(nota, beats * pulso * 0.95, "triangulo", vol=mel_vol, caida=0.25, vibrato=0.004)
+            _colocar(buf, t, onda)
+        t += beats * pulso
+    for compas, nota in campanitas:
+        _colocar(buf, compas * 4 * pulso, _nota(nota, pulso * 3, "seno", vol=0.12, caida=0.5))
+    # que el final empalme con el principio
+    cola = int(FS * 0.02)
+    buf[-cola:] *= np.linspace(1, 0, cola)
+    pico = np.max(np.abs(buf)) or 1
+    return buf / pico * 0.8
+
+
+def _musica_isla():
+    acordes = [("C3", ["C4", "E4", "G4", "C5"]), ("A2", ["A3", "C4", "E4", "A4"]),
+               ("F2", ["F3", "A3", "C4", "F4"]), ("G2", ["G3", "B3", "D4", "G4"])]
+    mel = [("E5", 1), ("G5", 1), ("A5", 1.5), ("G5", .5), ("E5", 2), ("C5", 1), ("D5", 1),
+           ("C5", 1), ("A4", 1), ("C5", 1), ("D5", 1), ("D5", 3), (None, 1),
+           ("E5", 1), ("G5", 1), ("C6", 1.5), ("A5", .5), ("G5", 2), ("E5", 1), ("G5", 1),
+           ("A5", 1), ("G5", 1), ("E5", 1), ("D5", 1), ("C5", 3), (None, 1)]
+    return _pista(100, 8, acordes, mel)
+
+
+def _musica_estudio():
+    acordes = [("F2", ["F3", "A3", "C4", "E4"]), ("E2", ["E3", "G3", "B3", "D4"]),
+               ("D2", ["D3", "F3", "A3", "C4"]), ("C2", ["C3", "E3", "G3", "B3"])]
+    return _pista(76, 8, acordes, (), arpegio_vol=0.05, bajo_vol=0.28, shaker=0.0,
+                  campanitas=[(0, "E6"), (2, "C6"), (4, "A5"), (6, "G5")])
+
+
+def _jingle_inicio():
+    """Fanfarria corta de 'arranca el nivel' (original)."""
+    voz = _seq(*[_nota(n, 0.075, duty=0.25, vol=0.4, caida=0.3) for n in ("G4", "C5", "E5", "G5", "E5", "G5")],
+               _silencio(0.04), _nota("C6", 0.12, duty=0.25, vol=0.4, caida=0.2),
+               _silencio(0.03), _nota("C6", 0.45, duty=0.25, vol=0.4, caida=0.6, vibrato=0.01))
+    segunda = _seq(_silencio(0.45 + 0.04), _nota("E5", 0.12, duty=0.5, vol=0.18, caida=0.2),
+                   _silencio(0.03), _nota("G5", 0.45, duty=0.5, vol=0.18, caida=0.6))
+    bajo = _seq(_nota("C3", 0.22, "triangulo", vol=0.5, caida=0.2), _nota("G3", 0.22, "triangulo", vol=0.5, caida=0.2),
+                _silencio(0.05), _nota("C4", 0.6, "triangulo", vol=0.5, caida=0.5))
+    return _mezclar(voz, segunda, bajo)
+
+
 class Sonidos:
+    """Efectos y música, cada uno con su interruptor y su volumen."""
+
     def __init__(self):
         self.ok = False
-        self.activo = True
+        self.activo = True            # efectos
         self.volumen = 0.6
+        self.musica_activa = True
+        self.volumen_musica = 0.5
         self._sonidos = {}
+        self._musicas = {}
+        self._actual = None
+        self._canal_musica = 0
+        self._agachar = 0.0
+
+    def _a_sonido(self, w, freq, canales, ganancia=0.8):
+        if freq != FS:
+            x_viejo = np.linspace(0, 1, len(w))
+            w = np.interp(np.linspace(0, 1, int(len(w) * freq / FS)), x_viejo, w)
+        datos = np.clip(w * 32767 * ganancia, -32767, 32767).astype(np.int16)
+        if canales > 1:
+            datos = np.repeat(datos[:, None], canales, axis=1)
+        return pygame.sndarray.make_sound(np.ascontiguousarray(datos))
 
     def iniciar(self):
-        """Arma los sonidos. Si no hay placa de audio, el juego sigue mudo."""
+        """Arma los sonidos y la música. Si no hay placa de audio, el juego sigue mudo."""
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init(FS, -16, 1, 512)
             freq, _, canales = pygame.mixer.get_init()
         except pygame.error:
             return
-        pygame.mixer.set_num_channels(16)
-        for nombre, w in _diseñar().items():
-            if freq != FS:
-                x_viejo = np.linspace(0, 1, len(w))
-                w = np.interp(np.linspace(0, 1, int(len(w) * freq / FS)), x_viejo, w)
-            datos = np.clip(w * 32767 * 0.8, -32767, 32767).astype(np.int16)
-            if canales > 1:
-                datos = np.repeat(datos[:, None], canales, axis=1)
+        pygame.mixer.set_num_channels(18)
+        pygame.mixer.set_reserved(2)          # los canales 0 y 1 son de la música
+        efectos = _diseñar()
+        efectos["inicio"] = _jingle_inicio()
+        for nombre, w in efectos.items():
             try:
-                self._sonidos[nombre] = pygame.sndarray.make_sound(np.ascontiguousarray(datos))
+                self._sonidos[nombre] = self._a_sonido(w, freq, canales)
+            except Exception:
+                continue
+        for nombre, f in (("isla", _musica_isla), ("estudio", _musica_estudio)):
+            try:
+                self._musicas[nombre] = self._a_sonido(f(), freq, canales, 0.55)
             except Exception:
                 continue
         self.ok = bool(self._sonidos)
@@ -149,7 +241,16 @@ class Sonidos:
     def _aplicar_volumen(self):
         for s in self._sonidos.values():
             s.set_volume(self.volumen)
+        self._volumen_canal_musica()
 
+    def _volumen_canal_musica(self):
+        if not self.ok:
+            return
+        v = self.volumen_musica * 0.6 * (0.3 if self._agachar > 0 else 1.0)
+        for k in (0, 1):
+            pygame.mixer.Channel(k).set_volume(v)
+
+    # ------------------------------------------------ efectos
     def tocar(self, nombre, volumen=1.0, variar=False):
         if not (self.ok and self.activo):
             return
@@ -161,11 +262,63 @@ class Sonidos:
             v = self.volumen * volumen * (random.uniform(0.85, 1.0) if variar else 1.0)
             canal.set_volume(v)
 
+    # ------------------------------------------------ música
+    def musica(self, nombre):
+        """Cambia la música de fondo con un fundido suave (None = silencio)."""
+        if nombre == self._actual:
+            return
+        self._actual = nombre
+        if not self.ok:
+            return
+        viejo = pygame.mixer.Channel(self._canal_musica)
+        viejo.fadeout(700)
+        if nombre and self.musica_activa and nombre in self._musicas:
+            self._canal_musica = 1 - self._canal_musica
+            nuevo = pygame.mixer.Channel(self._canal_musica)
+            nuevo.play(self._musicas[nombre], loops=-1, fade_ms=900)
+            self._volumen_canal_musica()
+
+    def agachar(self, segundos=1.5):
+        """Baja la música un ratito (para que se escuche una fanfarria)."""
+        self._agachar = max(self._agachar, segundos)
+        self._volumen_canal_musica()
+
+    def actualizar(self, dt):
+        if self._agachar > 0:
+            self._agachar -= dt
+            if self._agachar <= 0:
+                self._volumen_canal_musica()
+
+    # ------------------------------------------------ interruptores
+    def poner_musica(self, activa):
+        self.musica_activa = activa
+        if not self.ok:
+            return
+        if activa:
+            actual, self._actual = self._actual, None
+            self.musica(actual)
+        else:
+            for k in (0, 1):
+                pygame.mixer.Channel(k).fadeout(400)
+
+    def poner_efectos(self, activos):
+        self.activo = activos
+
+    def poner_volumenes(self, efectos=None, musica=None):
+        if efectos is not None:
+            self.volumen = efectos
+        if musica is not None:
+            self.volumen_musica = musica
+        self._aplicar_volumen()
+
     def alternar(self):
-        self.activo = not self.activo
-        if self.activo:
+        """Tecla M: silencia o vuelve a prender todo."""
+        prender = not (self.activo or self.musica_activa)
+        self.poner_efectos(prender)
+        self.poner_musica(prender)
+        if prender:
             self.tocar("click")
-        return self.activo
+        return prender
 
 
 sonidos = Sonidos()
