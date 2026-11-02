@@ -752,57 +752,106 @@ def g_jefe3(ctx):
 
 # ======================================================== MUNDO 3½: ¿qué regla va?
 
+def _simple(rng):
+    """Una función 'de la tabla' sola (sin nada adentro)."""
+    return _pieza(rng, rng.choice(["pot", "poly", "exp", "sen", "cos", "ln"]))[0]
+
+
+def _compuesta_tex(rng):
+    """Una función con algo adentro, ej. sen(3x^2+1), e^{x^2}, (x^3-2)^4."""
+    af, u, du, f = _cadena(Ctx(rng, "opciones"), ("pot", "sen", "cos", "exp", "ln", "raiz"), _adentro_poly)
+    return _tex_compuesta(af, u)
+
+
+def _anidado(rng):
+    """Dos reglas a la vez: ¿cuál va primero? (la de afuera)."""
+    afuera = rng.choice(["producto", "cociente", "cadena", "cadena"])
+    if afuera == "producto":
+        a, b = tex_par(_simple(rng)), _compuesta_tex(rng)
+        if rng.random() < 0.5:
+            a, b = b, a
+        return (f"{a} \\cdot {b}", "producto",
+                "Lo primero que ves es un **producto** de dos funciones. La cadena aparece después, "
+                "al derivar el factor que tiene algo adentro.")
+    if afuera == "cociente":
+        a, b = _compuesta_tex(rng), tex(_simple(rng))
+        if rng.random() < 0.5:
+            a, b = b, a
+        return (f"\\frac{{{a}}}{{{b}}}", "cociente",
+                "Afuera hay una **división** entre funciones de $x$. La cadena aparece después, "
+                "al derivar la parte que tiene algo adentro.")
+    # cadena por afuera, con un producto o un cociente adentro
+    while True:
+        p, q = _simple(rng), _simple(rng)
+        if p != q and not (p.is_polynomial(x) and q.is_polynomial(x)):
+            break
+    if rng.random() < 0.5:
+        adentro, que = tex(p * q), "un producto"
+    else:
+        adentro, que = f"\\frac{{{tex(p)}}}{{{tex(q)}}}", "un cociente"
+    forma = rng.choice(["exp", "raiz", "ln", "sen", "pot"])
+    n = rng.randint(2, 5)
+    formula = {"exp": f"e^{{{adentro}}}", "raiz": f"\\sqrt{{{adentro}}}", "ln": f"\\ln\\left({adentro}\\right)",
+               "sen": f"\\mathrm{{sen}}\\left({adentro}\\right)", "pot": f"\\left({adentro}\\right)^{{{n}}}"}[forma]
+    nombre = {"exp": "una exponencial", "raiz": "una raíz", "ln": "un logaritmo", "sen": "un seno",
+              "pot": f"algo elevado a la {n}"}[forma]
+    return (formula, "cadena",
+            f"Lo de afuera es {nombre} con algo adentro: primero **cadena**. Adentro hay {que}, "
+            "pero eso aparece recién al derivar $u$.")
+
+
+def _trampa(rng):
+    """Casos que parecen otra cosa."""
+    caso = rng.randint(0, 7)
+    k = rng.choice([2, 3, 4, 5, 7])
+    if caso == 0:
+        g = elegir(rng, ["\\mathrm{sen}(x)", "e^{x}", "\\ln(x)", "\\cos(x)", f"x^{{{rng.randint(2, 6)}}}"])
+        return (f"{k}\\,{g}", "tabla",
+                f"El {k} es una **constante**: sale afuera. No hace falta la regla del producto.")
+    if caso == 1:
+        g = elegir(rng, ["\\mathrm{sen}^{2}(x)", "\\cos^{3}(x)", "\\ln^{2}(x)", "\\mathrm{sen}^{4}(x)",
+                         "\\cos^{2}(x)"])
+        return (g, "cadena",
+                "$\\mathrm{sen}^2(x)$ significa $(\\mathrm{sen}\\,x)^2$: es una potencia con una función adentro, "
+                "o sea, **cadena**.")
+    if caso == 2:
+        return (f"\\frac{{{tex(_pieza(rng, rng.choice(['pot', 'poly']))[0])}}}{{{k}}}", "tabla",
+                f"Dividir por {k} es multiplicar por $\\frac{{1}}{{{k}}}$: una constante. Alcanza con la tabla.")
+    if caso == 3:
+        g = elegir(rng, ["\\mathrm{sen}", "\\cos", "e", "\\ln"])
+        f = f"e^{{{k}x}}" if g == "e" else f"{g}({k}x)"
+        return (f, "cadena", f"Aunque sea simple, ${k}x$ está **adentro**: es cadena (y $u' = {k}$).")
+    if caso == 4:
+        f = rng.choice(["\\mathrm{sen}(x)\\cdot\\cos(x)", "x\\,e^{x}", "x\\ln(x)", "e^{x}\\,\\mathrm{sen}(x)",
+                        "x^{2}\\cos(x)", "\\sqrt{x}\\,e^{x}"])
+        return (f, "producto", "Son dos funciones distintas de $x$ multiplicándose: **producto**.")
+    if caso == 5:
+        n = rng.randint(2, 5)
+        return (f"\\frac{{{k}}}{{x^{{{n}}}}}", "tabla",
+                f"Arriba hay solo un número: $\\frac{{{k}}}{{x^{n}}} = {k}x^{{-{n}}}$. Es una potencia: **tabla**, sin cociente.")
+    if caso == 6:
+        n = rng.choice([3, 5, 7])
+        m = rng.choice([2, 3, 4])
+        raiz = f"\\sqrt{{x^{{{n}}}}}" if m == 2 else f"\\sqrt[{m}]{{x^{{{n}}}}}"
+        return (raiz, "tabla",
+                f"Es $x^{{{n}/{m}}}$: una potencia de $x$ sola, sin nada adentro. **Tabla**.")
+    return (f"x^{{{rng.randint(2, 5)}}} + {k}\\,e^{{x}}", "tabla",
+            "Es una suma: cada término se deriva con la tabla. El número que multiplica no cambia nada.")
+
+
+# qué tanto de cada cosa sale según la dificultad (1: calentamiento ... 4: jefe)
+_MEZCLA_REGLA = {1: (0.30, 0.10), 2: (0.45, 0.30), 3: (0.25, 0.60), 4: (0.20, 0.75)}
+
+
 def _item_regla(rng, dificultad):
     """Devuelve (tex, regla_correcta, explicación)."""
-    trampas = dificultad >= 2 and rng.random() < 0.45
-    anidado = dificultad >= 3 and rng.random() < 0.5
+    p_trampa, p_anidado = _MEZCLA_REGLA.get(dificultad, _MEZCLA_REGLA[4])
+    r = rng.random()
+    if r < p_anidado:
+        return _anidado(rng)
+    if r < p_anidado + p_trampa:
+        return _trampa(rng)
     tipo = rng.choice(["tabla", "producto", "cociente", "cadena"])
-    pz = lambda t: _pieza(rng, t)[0]  # noqa: E731
-
-    if anidado:
-        caso = rng.randint(0, 5)
-        if caso == 0:
-            u, _ = _adentro_poly(rng)
-            return (f"{tex_par(pz('pot'))} \\cdot \\mathrm{{sen}}({tex(u)})", "producto",
-                    "Lo primero que ves es un producto. Después, uno de los factores lleva cadena.")
-        if caso == 1:
-            return ("e^{x\\,\\mathrm{sen}(x)}", "cadena",
-                    "Lo de afuera es una exponencial con algo en el exponente: primero cadena. El producto aparece recién al derivar lo de adentro.")
-        if caso == 2:
-            u, _ = _adentro_poly(rng)
-            return (f"\\frac{{\\mathrm{{sen}}({tex(u)})}}{{{tex(pz('pot'))}}}", "cociente",
-                    "Afuera hay una división. La cadena aparece después, al derivar el numerador.")
-        if caso == 3:
-            return ("\\left(x\\,e^{x}\\right)^{3}", "cadena",
-                    "Es algo **elevado a la 3**: primero cadena. Adentro hay un producto, pero eso viene después.")
-        if caso == 4:
-            return (f"\\ln(x)\\cdot\\cos({tex(_adentro_poly(rng)[0])})", "producto",
-                    "Dos funciones multiplicándose: primero producto.")
-        return (f"\\sqrt{{\\frac{{{tex(pz('pot'))}}}{{{tex(x**2 + rng.randint(1, 5))}}}}}", "cadena",
-                "Es una raíz con algo adentro: primero cadena. El cociente es lo de adentro.")
-
-    if trampas:
-        caso = rng.randint(0, 4)
-        if caso == 0:
-            k = rng.choice([2, 3, 4, 5, 7])
-            g = elegir(rng, ["\\mathrm{sen}(x)", "e^{x}", "\\ln(x)", "\\cos(x)"])
-            return (f"{k}\\,{g}", "tabla",
-                    f"El {k} es una **constante**: sale afuera. No hace falta la regla del producto.")
-        if caso == 1:
-            g = elegir(rng, ["\\mathrm{sen}^{2}(x)", "\\cos^{3}(x)", "\\ln^{2}(x)"])
-            return (g, "cadena",
-                    "$\\mathrm{sen}^2(x)$ significa $(\\mathrm{sen}\\,x)^2$: es una potencia con una función adentro, o sea, **cadena**.")
-        if caso == 2:
-            k = rng.choice([2, 3, 5])
-            return (f"\\frac{{x^{{{rng.randint(2, 5)}}}}}{{{k}}}", "tabla",
-                    f"Dividir por {k} es multiplicar por $\\frac{{1}}{{{k}}}$: una constante. Alcanza con la potencia.")
-        if caso == 3:
-            k = rng.choice([2, 3, 4, 5])
-            return (f"\\mathrm{{sen}}({k}x)", "cadena",
-                    f"Aunque sea simple, ${k}x$ está **adentro** del seno: es cadena (y $u' = {k}$).")
-        return ("\\mathrm{sen}(x)\\cdot\\cos(x)", "producto",
-                "Son dos funciones distintas de $x$ multiplicándose: producto.")
-
     if tipo == "tabla":
         t1 = elegir(rng, [t_potencia, t_sen, t_cos, t_exp, t_ln])(rng)
         t2 = rng.choice([t_potencia, t_constante, t_lineal])(rng)

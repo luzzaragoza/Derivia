@@ -75,10 +75,14 @@ MUNDOS = [
         Nivel("Jefe: cadena doble", "Capas dentro de capas. Sin pistas.", [g_jefe3], "tipeo", 3, jefe=True),
     ]),
     Mundo("3b", "Mundo 3½", "¿Qué regla va?", (252, 206, 160), [
-        Nivel("Calentamiento", "Elegí la regla. 15 segundos por función.", [g_regla], "opciones", 6, tiempo=15, dificultad=1),
-        Nivel("Trampas", "Constantes, $\\mathrm{sen}^2$ y otras trampitas. 10 segundos.", [g_regla], "opciones", 6, tiempo=10, dificultad=2),
-        Nivel("Reglas anidadas", "¿Qué va primero? 8 segundos.", [g_regla], "opciones", 6, tiempo=8, dificultad=3),
-        Nivel("Jefe: contrarreloj", "6 segundos por función.", [g_regla], "opciones", 8, jefe=True, tiempo=6, dificultad=3),
+        Nivel("Calentamiento", "Elegí la regla. Ojo, que ya hay alguna trampita. 15 segundos.", [g_regla], "opciones", 5,
+              tiempo=15, dificultad=1),
+        Nivel("Trampas", "Constantes, $\\mathrm{sen}^2$, $\\frac{k}{x^n}$... y alguna regla adentro de otra. 10 segundos.",
+              [g_regla], "opciones", 6, tiempo=10, dificultad=2),
+        Nivel("Reglas anidadas", "¿Qué va primero? La de afuera. 8 segundos.", [g_regla], "opciones", 6, tiempo=8,
+              dificultad=3),
+        Nivel("Jefe: contrarreloj", "Casi todo anidado. 6 segundos por función.", [g_regla], "opciones", 8, jefe=True,
+              tiempo=6, dificultad=4),
     ]),
     Mundo("4", "Mundo 4", "Derivadas parciales", (246, 190, 206), [
         Nivel("Respecto de x", "La $y$ es una constante, como un número.", [g_parcial_x], "opciones", 4),
@@ -96,30 +100,30 @@ MUNDOS = [
         Nivel("Jefe: integrales", "De todo un poco. Sin pistas.", [g_jefe5], "tipeo", 3, jefe=True),
     ]),
     Mundo("6", "Mundo 6", "Sustitución", (222, 206, 246), [
-        Nivel("Adentro lineal", "$\\int e^{3x}\\,dx$, $\\int \\mathrm{sen}(5x)\\,dx$: se divide por la constante.", [g_lineal], "opciones", 4),
-        Nivel("Elegir la u", "¿Qué conviene sustituir?", [g_sust], "opciones", 4),
         Nivel("Sustitución paso a paso", "Elegís $u$, calculás $du$ y resolvés.", [g_sust], "tipeo", 3, guiados=2),
-        Nivel("Acomodar constantes", "Cuando a $du$ le sobra un número.", [g_sust_acomodar, g_sust_acomodar, g_detective_sust_partes], "tipeo", 3),
+        Nivel("Acomodar constantes", "Cuando a $du$ le sobra un número.", [g_sust_acomodar, g_sust_acomodar, g_detective_sust_partes], "tipeo", 3, guiados=1),
+        Nivel("Atajo: adentro lineal", "$\\int e^{3x}\\,dx$, $\\int \\mathrm{sen}(5x)\\,dx$: es sustitución, pero alcanza con dividir por la constante.", [g_lineal], "tipeo", 4),
+        Nivel("Sustitución de una", "Directo al resultado.", [g_sust, g_sust_acomodar, g_lineal], "tipeo", 3, guiados=0),
         Nivel("Jefe: sustitución", "De una, sin pistas.", [g_jefe6], "tipeo", 3, jefe=True),
     ]),
     Mundo("7", "Mundo 7", "Integración por partes", (252, 222, 160), [
         Nivel("¿Quién es u?", "La regla LIATE para elegir bien.", [g_partes_eleccion], "opciones", 4),
         Nivel("Partes paso a paso", "$\\int u\\,dv = u\\,v - \\int v\\,du$", [g_partes], "tipeo", 3, guiados=2),
-        Nivel("Partes con logaritmos", "$\\int x^n \\ln x\\,dx$ y $\\int \\ln x\\,dx$.", [g_partes_log, g_partes_log, g_detective_sust_partes], "tipeo", 3),
+        Nivel("Partes con logaritmos", "$\\int x^n \\ln x\\,dx$ y $\\int \\ln x\\,dx$.", [g_partes_log, g_partes_log, g_detective_sust_partes], "tipeo", 3, guiados=1),
         Nivel("Jefe: partes", "Algunas piden partes dos veces. Sin pistas.", [g_jefe7], "tipeo", 3, jefe=True),
     ]),
     Mundo("8", "Mundo 8", "Integrales dobles", (190, 226, 200), [
         Nivel("Rectángulos", "De adentro hacia afuera.", [g_doble_rect], "tipeo", 4),
         Nivel("Regiones tipo I", "La $y$ entre dos curvas.", [g_doble_tipo1], "tipeo", 3),
         Nivel("Cambio de orden", "De $dy\\,dx$ a $dx\\,dy$, mirando el dibujo.", [g_cambio_orden], "opciones", 4),
-        Nivel("Coordenadas polares", "$dx\\,dy = r\\,dr\\,d\\theta$", [g_polares], "tipeo", 3),
+        Nivel("Coordenadas polares", "$dx\\,dy = r\\,dr\\,d\\theta$", [g_polares], "tipeo", 3, guiados=2),
         Nivel("Jefe: dobles", "Solo el resultado. Sin pistas.", [g_jefe8], "tipeo", 3, jefe=True),
     ]),
     Mundo("9", "Mundo 9", "Integrales triples", (240, 196, 180), [
         Nivel("Cajas", "Tres integrales, una adentro de otra.", [g_triple_caja], "tipeo", 3),
         Nivel("Límites variables", "Tetraedros y regiones bajo un plano.", [g_triple_region], "tipeo", 3),
-        Nivel("Cilíndricas", "$dV = r\\,dz\\,dr\\,d\\theta$", [g_cilindricas], "tipeo", 3),
-        Nivel("Esféricas", "$dV = \\rho^2\\,\\mathrm{sen}\\,\\varphi\\;d\\rho\\,d\\varphi\\,d\\theta$", [g_esfericas], "tipeo", 3),
+        Nivel("Cilíndricas", "$dV = r\\,dz\\,dr\\,d\\theta$", [g_cilindricas], "tipeo", 3, guiados=2),
+        Nivel("Esféricas", "$dV = \\rho^2\\,\\mathrm{sen}\\,\\varphi\\;d\\rho\\,d\\varphi\\,d\\theta$", [g_esfericas], "tipeo", 3, guiados=2),
         Nivel("Jefe final", "Triples de todo tipo. Sin pistas.", [g_jefe9], "tipeo", 3, jefe=True),
     ]),
 ]
@@ -188,6 +192,8 @@ def generar_nivel(mundo_id, nivel_idx, rng=None):
 EXTRA_JEFE_DESAFIO = 3          # ejercicios del jefe además de uno por cada nivel
 VIDAS_DESAFIO = 2
 MONEDAS_POR_EJERCICIO = 14      # lo que se gana en promedio por ejercicio (con racha)
+# generadores donde cada paso usa el resultado del anterior (no se puede dejar solo el último)
+PASOS_ENCADENADOS = {"g_doble_rect", "g_doble_tipo1", "g_triple_caja", "g_triple_region", "g_barrow", "g_int_raices"}
 
 
 def monedas_de_regalo(mundo, progreso):
@@ -206,8 +212,12 @@ def generar_desafio(mundo_id, rng=None):
         if nivel.jefe:
             continue
         gens = [g for g in nivel.generadores if "detective" not in g.__name__] or nivel.generadores
-        ej = generar(mundo_id, i, rng.choice(gens).__name__, rng.randrange(10**9), jefe=True)
-        ej.pasos = ej.pasos[-1:]
+        gen = rng.choice(gens).__name__
+        ej = generar(mundo_id, i, gen, rng.randrange(10**9), jefe=True)
+        if gen not in PASOS_ENCADENADOS:
+            ej.pasos = ej.pasos[-1:]
+        else:            # el último paso usa el resultado del anterior: se dejan todos, sin el andamiaje
+            ej.pasos = [p for p in ej.pasos if not p.repetitivo] or ej.pasos
         ejercicios.append(ej)
     rng.shuffle(ejercicios)
     i_jefe = len(mundo.niveles) - 1
