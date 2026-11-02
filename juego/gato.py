@@ -36,47 +36,85 @@ def _rot(p, centro, ang):
 
 
 def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
-    """Dibuja el gato a 2x en un espacio de diseño de 200×220 y lo achica (queda suavizado)."""
+    """Dibuja el gato en un espacio de diseño de 200×220.
+    Con Skia: directo al tamaño final, bordes suaves y sombreado con volumen.
+    Sin Skia: a 2x con pygame y después se achica (queda suavizado)."""
+    from . import pincel
     from . import ropa as prendas
-    K = tam * 2 / 200
+    fino = pincel.HAY_SKIA
+    K = tam * (1 if fino else 2) / 200
     OX = 30  # margen a los costados para que la cola y los brazos no se corten
     W, H = int((200 + 2 * OX) * K), int((222 + OY) * K)
-    s = pygame.Surface((W, H), pygame.SRCALPHA)
-    G = max(2, int(4 * K))  # grosor del contorno
+    G = max(2, int(4 * K)) if not fino else max(1.6, 4 * K)  # grosor del contorno
+    if fino:
+        hoja = pincel.skia.Surface(max(1, W), max(1, H))
+        cv = hoja.getCanvas()
+        cv.clear(pincel.skia.ColorTRANSPARENT)
+        d = pincel.TrazosSkia(cv)
+        s = pincel.HojaSkia(cv, W, H)
+    else:
+        d = pygame.draw
+        s = pygame.Surface((W, H), pygame.SRCALPHA)
+
+    def _g(n):
+        return n * K if fino else int(n * K)
 
     def P(x, y):
         return ((x + OX) * K, (y + OY) * K)
 
     def R(x, y, w, h):
+        if fino:
+            return pygame.FRect((x + OX) * K, (y + OY) * K, w * K, h * K)
         return pygame.Rect(int((x + OX) * K), int((y + OY) * K), int(w * K), int(h * K))
 
     def elipse(rect, color, contorno=True):
+        if fino:
+            r = pincel.skia.Rect.MakeXYWH(rect.x, rect.y, rect.w, rect.h)
+            if contorno:
+                cv.drawOval(r, d._p(BORDE, 2 * G))
+            cv.drawOval(r, pincel.relleno_sombreado(color, rect.x, rect.y, rect.w, rect.h))
+            return
         if contorno:
-            pygame.draw.ellipse(s, BORDE, rect.inflate(G * 2, G * 2))
-        pygame.draw.ellipse(s, color, rect)
+            d.ellipse(s, BORDE, rect.inflate(G * 2, G * 2))
+        d.ellipse(s, color, rect)
 
     def poligono(pts, color, contorno=True):
         pts = [P(*p) for p in pts]
+        if fino:
+            camino = pincel.skia.Path()
+            camino.addPoly([pincel.skia.Point(*p) for p in pts], True)
+            if contorno:
+                cv.drawPath(camino, d._p(BORDE, 2 * G))
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            cv.drawPath(camino, pincel.relleno_sombreado(color, min(xs), min(ys), max(xs) - min(xs) + 1,
+                                                         max(ys) - min(ys) + 1))
+            return
         if contorno:
-            pygame.draw.polygon(s, BORDE, pts, G * 2)
-        pygame.draw.polygon(s, color, pts)
+            d.polygon(s, BORDE, pts, G * 2)
+        d.polygon(s, color, pts)
 
     def trazo(pts, color, ancho, contorno=True):
         """Línea gruesa redondeada (para la cola y los brazos)."""
         pts = [P(*p) for p in pts]
+        if fino:
+            if contorno:
+                d.lines(s, BORDE, False, pts, 2 * (ancho * K + G))
+            d.lines(s, color, False, pts, 2 * ancho * K)
+            return
         if contorno:
             for p in pts:
-                pygame.draw.circle(s, BORDE, p, ancho * K + G)
-            pygame.draw.lines(s, BORDE, False, pts, int(2 * (ancho * K + G)))
+                d.circle(s, BORDE, p, ancho * K + G)
+            d.lines(s, BORDE, False, pts, int(2 * (ancho * K + G)))
         for p in pts:
-            pygame.draw.circle(s, color, p, ancho * K)
-        pygame.draw.lines(s, color, False, pts, int(2 * ancho * K))
+            d.circle(s, color, p, ancho * K)
+        d.lines(s, color, False, pts, int(2 * ancho * K))
 
     triste = animo == "triste"
     alegre = animo in ("feliz", "festejo")
     brazos = animo == "festejo"
     lz = _Lienzo()
     lz.s, lz.K, lz.G, lz.P, lz.R, lz.elipse, lz.poligono, lz.trazo = s, K, G, P, R, elipse, poligono, trazo
+    lz.d = d
     lz.triste = triste
     prendas.dibujar_capa("espalda", ropa, lz)
 
@@ -90,16 +128,16 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
         pts.append(_rot((x, y), (140, 190), ang * t))
     trazo(pts, NARANJA, 10)
     for p in pts[-4:]:
-        pygame.draw.circle(s, NARANJA_OSC, P(*p), 10 * K)
+        d.circle(s, NARANJA_OSC, P(*p), 10 * K)
     lz.cola = pts
     prendas.dibujar_capa("cola", ropa, lz)
     # ---- cuerpo
     elipse(R(46, 118, 108, 94), NARANJA)
     elipse(R(70, 140, 60, 62), CREMA, contorno=False)
     for x0 in (52, 58):
-        pygame.draw.line(s, NARANJA_OSC, P(x0, 150), P(x0 + 10, 154), int(4 * K))
+        d.line(s, NARANJA_OSC, P(x0, 150), P(x0 + 10, 154), _g(4))
     for x0 in (148, 142):
-        pygame.draw.line(s, NARANJA_OSC, P(x0, 150), P(x0 - 10, 154), int(4 * K))
+        d.line(s, NARANJA_OSC, P(x0, 150), P(x0 - 10, 154), _g(4))
     # patas de atrás
     elipse(R(52, 196, 38, 20), NARANJA)
     elipse(R(110, 196, 38, 20), NARANJA)
@@ -122,49 +160,52 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
     elipse(R(28, 30, 144, 112), NARANJA)
     elipse(R(66, 92, 68, 44), CREMA, contorno=False)
     for (x1, y1, x2, y2) in [(100, 34, 100, 50), (86, 38, 89, 52), (114, 38, 111, 52)]:
-        pygame.draw.line(s, NARANJA_OSC, P(x1, y1), P(x2, y2), int(5 * K))
+        d.line(s, NARANJA_OSC, P(x1, y1), P(x2, y2), _g(5))
     for (x1, y1, x2, y2) in [(30, 80, 46, 83), (32, 93, 46, 93), (170, 80, 154, 83), (168, 93, 154, 93)]:
-        pygame.draw.line(s, NARANJA_OSC, P(x1, y1), P(x2, y2), int(4 * K))
+        d.line(s, NARANJA_OSC, P(x1, y1), P(x2, y2), _g(4))
     # cachetes
     for cx in (58, 142):
+        if fino:
+            d.ellipse(s, ROSA + (150,), R(cx - 13, 99, 26, 14))
+            continue
         cachete = pygame.Surface((int(26 * K), int(14 * K)), pygame.SRCALPHA)
-        pygame.draw.ellipse(cachete, ROSA + (150,), cachete.get_rect())
+        d.ellipse(cachete, ROSA + (150,), cachete.get_rect())
         s.blit(cachete, cachete.get_rect(center=P(cx, 106)))
     # ---- ojos
     mx, my = mirar
     for cx in (74, 126):
         if ojos_cerrados or animo == "dormido":
             r = R(cx - 11, 76, 22, 16)
-            pygame.draw.arc(s, NEGRO, r, math.pi * 1.05, math.pi * 1.95, int(4 * K))
+            d.arc(s, NEGRO, r, math.pi * 1.05, math.pi * 1.95, _g(4))
         elif alegre:
             r = R(cx - 11, 74, 22, 20)
-            pygame.draw.arc(s, NEGRO, r, math.pi * 0.1, math.pi * 0.9, int(5 * K))
+            d.arc(s, NEGRO, r, math.pi * 0.1, math.pi * 0.9, _g(5))
         else:
             grande = animo == "sorpresa"
             w, h = (22, 26) if grande else (18, 24)
-            pygame.draw.ellipse(s, NEGRO, R(cx - w / 2 + mx, 72 + my, w, h))
-            pygame.draw.circle(s, (255, 255, 255), P(cx + 3 + mx, 79 + my), 4.5 * K)
-            pygame.draw.circle(s, (255, 255, 255), P(cx - 3 + mx, 89 + my), 2 * K)
+            d.ellipse(s, NEGRO, R(cx - w / 2 + mx, 72 + my, w, h))
+            d.circle(s, (255, 255, 255), P(cx + 3 + mx, 79 + my), 4.5 * K)
+            d.circle(s, (255, 255, 255), P(cx - 3 + mx, 89 + my), 2 * K)
     if triste:
-        pygame.draw.line(s, NEGRO, P(62, 70), P(84, 62), int(4 * K))
-        pygame.draw.line(s, NEGRO, P(138, 70), P(116, 62), int(4 * K))
+        d.line(s, NEGRO, P(62, 70), P(84, 62), _g(4))
+        d.line(s, NEGRO, P(138, 70), P(116, 62), _g(4))
         gota = [P(128, 98), P(124, 108), P(128, 112), P(132, 108)]
-        pygame.draw.polygon(s, LAGRIMA, gota)
-        pygame.draw.circle(s, LAGRIMA, P(128, 108), 4 * K)
+        d.polygon(s, LAGRIMA, gota)
+        d.circle(s, LAGRIMA, P(128, 108), 4 * K)
     # ---- nariz y boca
     poligono([(93, 96), (107, 96), (100, 103)], ROSA, contorno=False)
     if alegre:
         boca = R(89, 103, 22, 18)
-        pygame.draw.ellipse(s, ROJO_BOCA, boca)
-        pygame.draw.rect(s, CREMA, R(88, 100, 24, 8))
-        pygame.draw.ellipse(s, ROSA, R(94, 112, 12, 8))
+        d.ellipse(s, ROJO_BOCA, boca)
+        d.rect(s, CREMA, R(88, 100, 24, 8))
+        d.ellipse(s, ROSA, R(94, 112, 12, 8))
     elif triste:
-        pygame.draw.arc(s, NEGRO, R(90, 106, 20, 12), 0.2, math.pi - 0.2, int(3 * K))
+        d.arc(s, NEGRO, R(90, 106, 20, 12), 0.2, math.pi - 0.2, _g(3))
     elif animo in ("sorpresa", "pensando"):
-        pygame.draw.ellipse(s, ROJO_BOCA, R(95, 106, 10, 10 if animo == "sorpresa" else 7))
+        d.ellipse(s, ROJO_BOCA, R(95, 106, 10, 10 if animo == "sorpresa" else 7))
     else:
-        pygame.draw.arc(s, NEGRO, R(88, 98, 13, 12), math.pi * 1.05, math.pi * 1.95, int(3 * K))
-        pygame.draw.arc(s, NEGRO, R(99, 98, 13, 12), math.pi * 1.05, math.pi * 1.95, int(3 * K))
+        d.arc(s, NEGRO, R(88, 98, 13, 12), math.pi * 1.05, math.pi * 1.95, _g(3))
+        d.arc(s, NEGRO, R(99, 98, 13, 12), math.pi * 1.05, math.pi * 1.95, _g(3))
     if brazos:
         trazo([(64, 146), (34, 118), (14, 88)], NARANJA, 9)
         trazo([(136, 146), (166, 118), (186, 88)], NARANJA, 9)
@@ -172,9 +213,11 @@ def _render(tam, animo, ojos_cerrados, cola_paso, mirar, ropa=()):
         elipse(R(174, 70, 24, 22), CREMA)
     # bigotes
     for (x1, y1, x2, y2) in [(56, 100, 22, 94), (56, 107, 24, 110), (144, 100, 178, 94), (144, 107, 176, 110)]:
-        pygame.draw.line(s, BORDE, P(x1, y1), P(x2, y2), max(1, int(2 * K)))
+        d.line(s, BORDE, P(x1, y1), P(x2, y2), _g(2))
     for capa in ("cuello", "cara", "cabeza", "mano"):
         prendas.dibujar_capa(capa, ropa, lz)
+    if fino:
+        return pincel.a_pygame(hoja)
     return pygame.transform.smoothscale(s, (int(W / 2), int(H / 2)))
 
 

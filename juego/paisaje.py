@@ -83,15 +83,23 @@ class Cielo:
         if sol and astro == "luna":
             c = (ANCHO - 160, 110)
             _halo(sup, c, 110, (240, 240, 220), 70)
-            dibujo.circle(sup, (246, 244, 226), c, 52)
-            for dx, dy, r in ((-16, -10, 10), (14, 12, 7), (10, -20, 5), (-6, 22, 6)):
-                dibujo.circle(sup, (222, 220, 200), (c[0] + dx, c[1] + dy), r)
+            pieza, m = pincel.luna(52) if pincel.HAY_SKIA else (None, 0)
+            if pieza is not None:
+                sup.blit(pieza, (c[0] - 54 - m, c[1] - 54 - m))
+            else:
+                dibujo.circle(sup, (246, 244, 226), c, 52)
+                for dx, dy, r in ((-16, -10, 10), (14, 12, 7), (10, -20, 5), (-6, 22, 6)):
+                    dibujo.circle(sup, (222, 220, 200), (c[0] + dx, c[1] + dy), r)
             sol = False
         elif sol and astro == "sol_bajo":
             c = (ANCHO - 230, 250)
             _halo(sup, c, 170, (255, 200, 120), 110)
-            dibujo.circle(sup, (255, 160, 90), c, 74)
-            dibujo.circle(sup, (255, 196, 120), (c[0] - 20, c[1] - 22), 18)
+            pieza, m = pincel.sol_bajo(74) if pincel.HAY_SKIA else (None, 0)
+            if pieza is not None:
+                sup.blit(pieza, (c[0] - 76 - m, c[1] - 76 - m))
+            else:
+                dibujo.circle(sup, (255, 160, 90), c, 74)
+                dibujo.circle(sup, (255, 196, 120), (c[0] - 20, c[1] - 22), 18)
             sol = False
         elif astro == "ninguno":
             sol = False
@@ -253,13 +261,16 @@ def _armar_isla(w, h, color_pasto, semilla, palmeras, palmeras_borde, deco, oril
         dibujo.polygon(s, ui.ARENA, _blob(cx, cy, w * 0.47 - 3, h * 0.4 - 3, random.Random(semilla)))
         dibujo.polygon(s, ui.oscurecer(color_pasto, 0.75), [(x, y + 6) for x, y in pasto])
         dibujo.polygon(s, color_pasto, pasto)
+    final = s
+    if pincel.HAY_SKIA:   # lo de arriba de la isla se pinta con Skia en una hoja aparte
+        s = pincel.CapaSkia(final.get_width(), final.get_height())
     # matitas
     for _ in range(14):
         x = rng.uniform(cx - w * 0.33, cx + w * 0.33)
         y = rng.uniform(cy - h * 0.25, cy + h * 0.18)
         c = ui.oscurecer(color_pasto, 0.82)
         for dx in (-4, 0, 4):
-            dibujo.line(s, c, (x, y), (x + dx * 1.5, y - 9), 2)
+            _d(s).line(s, c, (x, y), (x + dx * 1.5, y - 9), 2)
     _decorar(s, deco, cx, cy, w, h, rng, color_pasto)
     for k in range(palmeras if deco in ("palmeras", "flores", "rocas") else 0):
         lado = -1 if k % 2 == 0 else 1
@@ -270,6 +281,9 @@ def _armar_isla(w, h, color_pasto, semilla, palmeras, palmeras_borde, deco, oril
             x = cx + lado * w * rng.uniform(0.28, 0.4)
             y = cy + rng.uniform(-h * 0.12, h * 0.08)
         palmera(s, (x, y), rng.uniform(80, 110), inclina=0.25 * lado, escala=rng.uniform(0.75, 0.95))
+    if s is not final:
+        final.blit(s.terminar(), (0, 0))
+        s = final
     if tinte:
         s.fill(tuple(tinte) + (255,), special_flags=pygame.BLEND_RGBA_MULT)
     return s
@@ -354,15 +368,20 @@ def tema(mundo_id):
     return TEMAS.get(mundo_id, TEMAS["1"])
 
 
+def _d(sup):
+    """Con qué se dibuja: Skia si la hoja es de Skia, si no las funciones de siempre."""
+    return getattr(sup, "d", dibujo)
+
+
 def _con_borde_poligono(sup, pts, color, grosor=3):
-    dibujo.polygon(sup, ui.BORDE, pts, grosor * 2)
-    dibujo.polygon(sup, color, pts)
+    _d(sup).polygon(sup, ui.BORDE, pts, grosor * 2)
+    _d(sup).polygon(sup, color, pts)
 
 
 def pino(sup, base, alto=120, color=(64, 140, 80)):
     bx, by = base
-    dibujo.rect(sup, ui.BORDE, (bx - 7, by - 24, 14, 26))
-    dibujo.rect(sup, (140, 92, 54), (bx - 5, by - 22, 10, 22))
+    _d(sup).rect(sup, ui.BORDE, (bx - 7, by - 24, 14, 26))
+    _d(sup).rect(sup, (140, 92, 54), (bx - 5, by - 22, 10, 22))
     for k in range(3):
         ancho = alto * (0.42 - k * 0.09)
         y0 = by - 18 - k * alto * 0.24
@@ -375,44 +394,44 @@ def cactus(sup, base, alto=90):
     verde = (110, 176, 96)
     for r in [(bx - 12, by - alto, 24, alto), (bx - 40, by - alto * 0.7, 18, alto * 0.38),
               (bx + 22, by - alto * 0.85, 18, alto * 0.45)]:
-        dibujo.rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=12)
+        _d(sup).rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=12)
     for r in [(bx - 30, by - alto * 0.42, 22, 14), (bx + 10, by - alto * 0.5, 22, 14)]:
-        dibujo.rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=6)
+        _d(sup).rect(sup, ui.BORDE, pygame.Rect(r).inflate(6, 6), border_radius=6)
     for r in [(bx - 12, by - alto, 24, alto), (bx - 40, by - alto * 0.7, 18, alto * 0.38),
               (bx + 22, by - alto * 0.85, 18, alto * 0.45), (bx - 30, by - alto * 0.42, 22, 14),
               (bx + 10, by - alto * 0.5, 22, 14)]:
-        dibujo.rect(sup, verde, r, border_radius=10)
-    dibujo.circle(sup, (255, 150, 190), (bx, by - alto - 2), 6)
+        _d(sup).rect(sup, verde, r, border_radius=10)
+    _d(sup).circle(sup, (255, 150, 190), (bx, by - alto - 2), 6)
 
 
 def roca(sup, centro, r, color=(160, 156, 150)):
     cx, cy = centro
     pts = [(cx - r, cy), (cx - r * 0.7, cy - r * 0.7), (cx, cy - r * 0.9), (cx + r * 0.8, cy - r * 0.55), (cx + r, cy)]
     _con_borde_poligono(sup, pts, color)
-    dibujo.line(sup, ui.aclarar(color, 0.35), (cx - r * 0.5, cy - r * 0.55), (cx - r * 0.05, cy - r * 0.75), 3)
+    _d(sup).line(sup, ui.aclarar(color, 0.35), (cx - r * 0.5, cy - r * 0.55), (cx - r * 0.05, cy - r * 0.75), 3)
 
 
 def flor(sup, pos, color):
     x, y = pos
-    dibujo.line(sup, (80, 150, 70), (x, y), (x, y + 10), 2)
+    _d(sup).line(sup, (80, 150, 70), (x, y), (x, y + 10), 2)
     for k in range(5):
         a = k * math.tau / 5
-        dibujo.circle(sup, color, (x + math.cos(a) * 5, y + math.sin(a) * 5), 4)
-    dibujo.circle(sup, ui.SOL, (x, y), 3)
+        _d(sup).circle(sup, color, (x + math.cos(a) * 5, y + math.sin(a) * 5), 4)
+    _d(sup).circle(sup, ui.SOL, (x, y), 3)
 
 
 def hongo(sup, base, escala=1.0, color=(200, 80, 110)):
     bx, by = base
     tallo = pygame.Rect(0, 0, 18 * escala, 34 * escala)
     tallo.midbottom = (bx, by)
-    dibujo.rect(sup, ui.BORDE, tallo.inflate(6, 6), border_radius=8)
-    dibujo.rect(sup, (250, 236, 210), tallo, border_radius=7)
+    _d(sup).rect(sup, ui.BORDE, tallo.inflate(6, 6), border_radius=8)
+    _d(sup).rect(sup, (250, 236, 210), tallo, border_radius=7)
     rx, ry = 36 * escala, 30 * escala
     base_y = tallo.top + 8 * escala
     cupula = [(bx + math.cos(a) * rx, base_y - math.sin(a) * ry) for a in [k * math.pi / 16 for k in range(17)]]
     _con_borde_poligono(sup, cupula, color)
     for dx, dy, r in ((-16, -10, 6), (10, -18, 5), (22, -6, 4), (-2, -6, 4)):
-        dibujo.circle(sup, (255, 248, 236), (bx + dx * escala, base_y + dy * escala), r * escala)
+        _d(sup).circle(sup, (255, 248, 236), (bx + dx * escala, base_y + dy * escala), r * escala)
 
 
 def montana(sup, base, ancho, alto):
@@ -421,19 +440,19 @@ def montana(sup, base, ancho, alto):
     _con_borde_poligono(sup, [(bx - ancho * 0.14, by - alto * 0.72), (bx, by - alto), (bx + ancho * 0.14, by - alto * 0.72),
                               (bx + ancho * 0.05, by - alto * 0.66), (bx - ancho * 0.04, by - alto * 0.7)], (250, 250, 255), 2)
     # cascada
-    dibujo.rect(sup, (150, 210, 240), (bx + ancho * 0.08, by - alto * 0.55, 16, alto * 0.55))
+    _d(sup).rect(sup, (150, 210, 240), (bx + ancho * 0.08, by - alto * 0.55, 16, alto * 0.55))
     for k in range(4):
         y = by - alto * 0.5 + k * alto * 0.13
-        dibujo.line(sup, (230, 248, 255), (bx + ancho * 0.08 + 4, y), (bx + ancho * 0.08 + 4, y + 14), 2)
+        _d(sup).line(sup, (230, 248, 255), (bx + ancho * 0.08 + 4, y), (bx + ancho * 0.08 + 4, y + 14), 2)
 
 
 def volcan(sup, base, ancho, alto):
     bx, by = base
     _con_borde_poligono(sup, [(bx - ancho / 2, by), (bx - ancho * 0.12, by - alto), (bx + ancho * 0.12, by - alto),
                               (bx + ancho / 2, by)], (134, 96, 80))
-    dibujo.polygon(sup, (250, 120, 60), [(bx - ancho * 0.12, by - alto), (bx + ancho * 0.12, by - alto),
+    _d(sup).polygon(sup, (250, 120, 60), [(bx - ancho * 0.12, by - alto), (bx + ancho * 0.12, by - alto),
                                               (bx + ancho * 0.05, by - alto * 0.86), (bx - ancho * 0.02, by - alto * 0.9)])
-    dibujo.lines(sup, (250, 150, 70), False, [(bx + ancho * 0.02, by - alto * 0.9), (bx - ancho * 0.04, by - alto * 0.6),
+    _d(sup).lines(sup, (250, 150, 70), False, [(bx + ancho * 0.02, by - alto * 0.9), (bx - ancho * 0.04, by - alto * 0.6),
                                                    (bx + ancho * 0.03, by - alto * 0.35)], 6)
 
 
@@ -441,28 +460,28 @@ def arbol_seco(sup, base, alto=100):
     bx, by = base
     color = (96, 72, 64)
     tronco = [(bx, by), (bx + 4, by - alto * 0.6), (bx - 2, by - alto)]
-    dibujo.lines(sup, ui.BORDE, False, tronco, 12)
-    dibujo.lines(sup, color, False, tronco, 8)
+    _d(sup).lines(sup, ui.BORDE, False, tronco, 12)
+    _d(sup).lines(sup, color, False, tronco, 8)
     for (x1, y1, x2, y2) in ((bx + 3, by - alto * 0.55, bx + 34, by - alto * 0.8), (bx + 1, by - alto * 0.75, bx - 30, by - alto * 0.98),
                              (bx + 20, by - alto * 0.68, bx + 30, by - alto * 0.95)):
-        dibujo.line(sup, ui.BORDE, (x1, y1), (x2, y2), 8)
-        dibujo.line(sup, color, (x1, y1), (x2, y2), 4)
+        _d(sup).line(sup, ui.BORDE, (x1, y1), (x2, y2), 8)
+        _d(sup).line(sup, color, (x1, y1), (x2, y2), 4)
 
 
 def calavera_roca(sup, centro, r):
     cx, cy = centro
     gris = (176, 172, 168)
-    dibujo.circle(sup, ui.BORDE, (cx, cy), r + 3)
-    dibujo.circle(sup, gris, (cx, cy), r)
+    _d(sup).circle(sup, ui.BORDE, (cx, cy), r + 3)
+    _d(sup).circle(sup, gris, (cx, cy), r)
     mandibula = pygame.Rect(0, 0, r * 1.1, r * 0.7)
     mandibula.midtop = (cx, cy + r * 0.55)
-    dibujo.rect(sup, ui.BORDE, mandibula.inflate(6, 6), border_radius=10)
-    dibujo.rect(sup, gris, mandibula, border_radius=8)
+    _d(sup).rect(sup, ui.BORDE, mandibula.inflate(6, 6), border_radius=10)
+    _d(sup).rect(sup, gris, mandibula, border_radius=8)
     for dx in (-0.38, 0.38):
-        dibujo.ellipse(sup, (40, 34, 56), (cx + dx * r - r * 0.22, cy - r * 0.1, r * 0.44, r * 0.5))
-    dibujo.polygon(sup, (40, 34, 56), [(cx, cy + r * 0.38), (cx - r * 0.1, cy + r * 0.58), (cx + r * 0.1, cy + r * 0.58)])
+        _d(sup).ellipse(sup, (40, 34, 56), (cx + dx * r - r * 0.22, cy - r * 0.1, r * 0.44, r * 0.5))
+    _d(sup).polygon(sup, (40, 34, 56), [(cx, cy + r * 0.38), (cx - r * 0.1, cy + r * 0.58), (cx + r * 0.1, cy + r * 0.58)])
     for k in range(-2, 3):
-        dibujo.line(sup, ui.BORDE, (cx + k * r * 0.18, mandibula.top + 4), (cx + k * r * 0.18, mandibula.bottom - 4), 2)
+        _d(sup).line(sup, ui.BORDE, (cx + k * r * 0.18, mandibula.top + 4), (cx + k * r * 0.18, mandibula.bottom - 4), 2)
 
 
 def _decorar(s, deco, cx, cy, w, h, rng, pasto):

@@ -536,3 +536,185 @@ def pedestal(w, h, color):
                     _paint(aclarar(color, 0.45), 200, Style=skia.Paint.kStroke_Style, StrokeWidth=3))
 
     return _pieza(("pedestal", w, h, tuple(color)), w, h, pintar, m), m
+
+
+# ---------------------------------------------------------------- traductor pygame.draw → Skia
+def a_pygame(sup):
+    """skia.Surface → pygame.Surface con transparencia."""
+    W, H = sup.width(), sup.height()
+    arr = sup.makeImageSnapshot().toarray(colorType=skia.kBGRA_8888_ColorType, alphaType=skia.kUnpremul_AlphaType)
+    return pygame.image.frombuffer(arr.tobytes(), (W, H), "BGRA").copy()
+
+
+class HojaSkia:
+    """Se hace pasar por la superficie de pygame (solo para 'blit')."""
+
+    def __init__(self, cv, w, h):
+        self.cv, self.w, self.h = cv, w, h
+
+    def get_width(self):
+        return self.w
+
+    def get_height(self):
+        return self.h
+
+    def blit(self, fuente, destino, *a, **kw):
+        import numpy as np
+        w, h = fuente.get_size()
+        arr = np.frombuffer(pygame.image.tobytes(fuente, "RGBA"), np.uint8).reshape(h, w, 4).copy()
+        img = skia.Image.fromarray(arr, colorType=skia.kRGBA_8888_ColorType)
+        x, y = (destino[0], destino[1]) if not isinstance(destino, pygame.Rect) else destino.topleft
+        self.cv.drawImage(img, x, y, skia.SamplingOptions(skia.FilterMode.kLinear))
+
+
+def _rect(r):
+    x, y, w, h = tuple(r)[:4]
+    return skia.Rect.MakeXYWH(x, y, w, h)
+
+
+class TrazosSkia:
+    """Mismas funciones que pygame.draw (circle, rect, ellipse, arc, polygon, line, lines), pero con Skia:
+    todo sale con bordes suaves y respeta la transparencia de los colores."""
+
+    def __init__(self, cv, sombreado=False):
+        self.cv = cv
+        self.sombreado = sombreado   # rellenos con volumen (para árboles, rocas, hongos...)
+
+    def _relleno(self, color, x, y, w, h):
+        if self.sombreado and (len(color) == 3 or color[3] == 255) and w > 6 and h > 6:
+            return relleno_sombreado(color, x, y, w, h)
+        return self._p(color)
+
+    @staticmethod
+    def _p(color, ancho=0):
+        p = skia.Paint(AntiAlias=True, Color=_c(color))
+        if ancho:
+            p.setStyle(skia.Paint.kStroke_Style)
+            p.setStrokeWidth(ancho)
+            p.setStrokeCap(skia.Paint.kRound_Cap)
+            p.setStrokeJoin(skia.Paint.kRound_Join)
+        return p
+
+    def circle(self, s, color, centro, radio, width=0):
+        if width:
+            self.cv.drawCircle(centro[0], centro[1], max(0.5, radio - width / 2), self._p(color, width))
+        else:
+            self.cv.drawCircle(centro[0], centro[1], radio,
+                               self._relleno(color, centro[0] - radio, centro[1] - radio, 2 * radio, 2 * radio))
+
+    def ellipse(self, s, color, rect, width=0):
+        r = _rect(rect)
+        if width:
+            r.inset(width / 2, width / 2)
+            self.cv.drawOval(r, self._p(color, width))
+        else:
+            self.cv.drawOval(r, self._relleno(color, r.x(), r.y(), r.width(), r.height()))
+
+    def rect(self, s, color, rect, width=0, border_radius=0, **kw):
+        r = _rect(rect)
+        if width:
+            r.inset(width / 2, width / 2)
+        if border_radius > 0:
+            p = self._p(color, width) if width else self._relleno(color, r.x(), r.y(), r.width(), r.height())
+            self.cv.drawRRect(skia.RRect.MakeRectXY(r, border_radius, border_radius), p)
+        else:
+            p = self._p(color, width)
+            if width:
+                p.setStrokeJoin(skia.Paint.kMiter_Join)
+            self.cv.drawRect(r, p)
+
+    def arc(self, s, color, rect, inicio, fin, width=1):
+        r = _rect(rect)
+        r.inset(width / 2, width / 2)
+        self.cv.drawArc(r, -math.degrees(fin), math.degrees(fin - inicio), False, self._p(color, width))
+
+    def polygon(self, s, color, pts, width=0):
+        if len(pts) < 3:
+            return
+        camino = skia.Path()
+        camino.addPoly([skia.Point(*p) for p in pts], True)
+        if width:
+            self.cv.drawPath(camino, self._p(color, width))
+        else:
+            b = camino.computeTightBounds()
+            self.cv.drawPath(camino, self._relleno(color, b.x(), b.y(), b.width(), b.height()))
+
+    def line(self, s, color, a, b, width=1):
+        self.cv.drawLine(a[0], a[1], b[0], b[1], self._p(color, max(1, width)))
+
+    def lines(self, s, color, cerrado, pts, width=1):
+        camino = skia.Path()
+        camino.addPoly([skia.Point(*p) for p in pts], cerrado)
+        self.cv.drawPath(camino, self._p(color, max(1, width)))
+
+    aaline = line
+    aalines = lines
+
+
+def relleno_sombreado(color, x, y, w, h):
+    """Pintura con volumen: más clara arriba a la izquierda, más oscura abajo."""
+    a = color[3] if len(color) == 4 else 255
+    cs = [aclarar(color, 0.2) + (a,), tuple(color[:3]) + (a,), oscurecer(color, 0.86) + (a,)]
+    sh = _radial(x + w * 0.36, y + h * 0.28, max(w, h) * 0.9, cs, [0, 0.5, 1])
+    return skia.Paint(AntiAlias=True, Shader=sh)
+
+
+class CapaSkia:
+    """Hoja transparente en coordenadas lógicas donde se puede dibujar con las funciones de
+    siempre (hoja.d.polygon(hoja, ...)) y pegar Lienzos. Al final: terminar() → Lienzo."""
+
+    def __init__(self, w, h, sombreado=True):
+        self.e = escala()
+        self.w, self.h = w, h
+        self.hoja = skia.Surface(max(1, math.ceil(w * self.e)), max(1, math.ceil(h * self.e)))
+        self.cv = self.hoja.getCanvas()
+        self.cv.clear(skia.ColorTRANSPARENT)
+        self.cv.scale(self.e, self.e)
+        self.d = TrazosSkia(self.cv, sombreado)
+
+    def get_width(self):
+        return self.w
+
+    def get_height(self):
+        return self.h
+
+    def blit(self, fuente, destino, *a, **kw):
+        import numpy as np
+        sup = fuente.sup if isinstance(fuente, Lienzo) else fuente
+        w, h = sup.get_size()
+        arr = np.frombuffer(pygame.image.tobytes(sup, "RGBA"), np.uint8).reshape(h, w, 4).copy()
+        img = skia.Image.fromarray(arr, colorType=skia.kRGBA_8888_ColorType)
+        x, y = (destino[0], destino[1]) if not isinstance(destino, pygame.Rect) else destino.topleft
+        lw, lh = (fuente.w, fuente.h) if isinstance(fuente, Lienzo) else (w, h)
+        self.cv.drawImageRect(img, skia.Rect.MakeXYWH(x, y, lw, lh), skia.SamplingOptions(skia.FilterMode.kLinear))
+
+    def terminar(self):
+        return Lienzo.desde(a_pygame(self.hoja), self.e)
+
+
+def luna(r=52):
+    m = 8
+
+    def pintar(cv):
+        c = r + 2
+        cv.drawCircle(c, c, r, _paint(Shader=_radial(c - r * 0.35, c - r * 0.35, r * 1.5,
+                                                     [(255, 254, 240), (240, 238, 216), (206, 204, 188)], [0, 0.55, 1])))
+        for dx, dy, rr in ((-16, -10, 10), (14, 12, 7), (10, -20, 5), (-6, 22, 6), (22, -4, 4)):
+            x, y = c + dx, c + dy
+            cv.drawCircle(x, y, rr, _paint(Shader=_radial(x + rr * 0.3, y + rr * 0.3, rr * 1.2,
+                                                          [(232, 230, 212), (204, 200, 182)])))
+            cv.drawCircle(x, y, rr, _paint((180, 176, 160), 120, Style=skia.Paint.kStroke_Style, StrokeWidth=1))
+
+    return _pieza(("luna", r), 2 * r + 4, 2 * r + 4, pintar, m), m
+
+
+def sol_bajo(r=74):
+    m = 8
+
+    def pintar(cv):
+        c = r + 2
+        cv.drawCircle(c, c, r, _paint(Shader=_radial(c - r * 0.3, c - r * 0.35, r * 1.5,
+                                                     [(255, 214, 150), (255, 160, 90), (236, 112, 70)], [0, 0.5, 1])))
+        cv.drawCircle(c - r * 0.28, c - r * 0.3, r * 0.2, _paint((255, 236, 200), 150))
+
+    return _pieza(("sol_bajo", r), 2 * r + 4, 2 * r + 4, pintar, m), m
