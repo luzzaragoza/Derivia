@@ -50,22 +50,40 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 
 ## Cómo jugar en Windows
 
-### Opción A: armar el `.exe` (recomendada)
+### Opción A: con el instalador (recomendada)
 
-1. Instalá Python desde https://www.python.org/downloads/ (la 3.12 o una más nueva).
-   En el instalador **marcá la casilla "Add python.exe to PATH"**.
-2. Descomprimí la carpeta `derivia` donde quieras.
-3. Hacé doble clic en **`construir_exe.bat`**. Tarda unos minutos la primera vez.
-4. Cuando termina, el juego queda en **`dist\Derivia.exe`**. Copialo al Escritorio y listo:
-   desde ahí se abre con doble clic, sin necesitar nada más.
+1. Bajá `Derivia-Setup-<versión>.exe` de la página de **Releases** del repo
+   (o de la última corrida de **Actions → Instalador de Windows**, en *Artifacts*).
+2. Abrilo y seguí los pasos. No pide permisos de administrador. Crea el acceso directo en el
+   menú Inicio (y en el Escritorio si querés) y se desinstala desde *Configuración → Aplicaciones*.
 
-> La primera vez que lo abras, Windows puede mostrar "Windows protegió su PC" porque el
-> `.exe` no está firmado. Tocá **Más información → Ejecutar de todas formas**.
-> Tarda unos segundos en abrir porque lleva Python adentro.
+> La primera vez, Windows puede mostrar "Windows protegió su PC" porque el instalador no está
+> firmado. Tocá **Más información → Ejecutar de todas formas**.
 
-### Opción B: jugar sin armar el `.exe`
+Para actualizar, instalá la versión nueva encima: el progreso no se pierde.
 
-Con Python instalado (paso 1 de arriba), hacé doble clic en **`jugar.bat`**.
+### Opción B: armar el juego vos
+
+Instalá Python desde https://www.python.org/downloads/ (la 3.12 o una más nueva) y en el instalador
+**marcá la casilla "Add python.exe to PATH"**. Después, doble clic en:
+
+- **`construir_instalador.bat`**: arma el instalador en `salida\` (también necesita
+  [Inno Setup 6](https://jrsoftware.org/isdl.php)).
+- **`construir_exe.bat`**: arma solo la carpeta `dist\Derivia` y el juego se abre con `Derivia.exe`.
+  Si lo movés, mové la carpeta entera.
+- **`jugar.bat`**: juega directo con Python, sin armar nada.
+
+### Sacar una versión nueva
+
+Se hace con una etiqueta que empiece con `v`:
+
+```
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub arma el instalador solo (tarda unos 10 minutos) y lo publica en **Releases** como
+`Derivia-Setup-1.0.0.exe`. Si cambiás el gato, `python herramientas/hacer_icono.py` regenera el ícono.
 
 ## Cómo escribir las respuestas
 
@@ -117,6 +135,10 @@ juego/paisaje.py      cielo, mar, islas, palmeras y el pergamino de fondo
 juego/fx.py           confeti, chispas, monedas que vuelan, fueguito
 juego/sonido.py       los sonidos 8-bit (se sintetizan al arrancar, no hay archivos de audio)
 juego/progreso.py     guardado
+derivia.spec          receta de PyInstaller (arma dist/Derivia)
+instalador.iss        receta de Inno Setup (arma el Setup)
+.github/workflows/instalador.yml   GitHub arma el instalador y lo publica al subir una etiqueta v*
+herramientas/hacer_icono.py        genera juego/assets/derivia.ico a partir del gato
 tests/                pruebas: genera cientos de ejercicios y verifica que todo esté bien
 ```
 

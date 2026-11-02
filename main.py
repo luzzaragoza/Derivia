@@ -8,14 +8,13 @@ import sys
 
 def _icono():
     import pygame
-    s = pygame.Surface((64, 64), pygame.SRCALPHA)
+    png = os.path.join(os.path.dirname(os.path.abspath(__file__)), "juego", "assets", "icono.png")
     try:
-        from juego import gato
-        cara = gato.superficie(70, "feliz")
-        s.blit(cara, cara.get_rect(midtop=(32, 0)))
+        return pygame.image.load(png)
     except Exception:
+        s = pygame.Surface((64, 64), pygame.SRCALPHA)
         pygame.draw.circle(s, (247, 152, 60), (32, 32), 30)
-    return s
+        return s
 
 
 def main():

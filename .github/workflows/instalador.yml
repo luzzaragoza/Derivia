@@ -1,0 +1,96 @@
+# Arma el instalador de Derivia para Windows en las compus de GitHub.
+#
+# - A mano: pestaña Actions → "Instalador de Windows" → Run workflow.
+#   El instalador queda para bajar abajo de todo en la corrida, en "Artifacts".
+# - Para sacar una versión: subí una etiqueta que empiece con v, por ejemplo
+#       git tag v1.0.0
+#       git push origin v1.0.0
+#   y aparece en la página de Releases del repo con Derivia-Setup-1.0.0.exe adjunto.
+
+name: Instalador de Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    # en las ramas, solo cuando se toca cómo se arma el juego (para enterarse rápido si se rompe)
+    branches: ["**"]
+    paths:
+      - derivia.spec
+      - instalador.iss
+      - requirements.txt
+      - .github/workflows/instalador.yml
+
+permissions:
+  contents: write   # para publicar el Release cuando se sube una etiqueta v*
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Versión
+        id: version
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") }
+          else { $v = "dev-" + "${{ github.sha }}".Substring(0, 7) }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Versión: $v"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pip-licenses
+          pip install skia-python
+
+      - name: Armar Derivia con PyInstaller
+        run: pyinstaller --noconfirm --clean derivia.spec
+
+      - name: Licencias de las librerías
+        run: |
+          pip-licenses --from=mixed --with-license-file --no-license-path --format=plain-vertical --output-file=dist/Derivia/LICENCIAS.txt
+          Copy-Item juego/assets/fuentes/OFL.txt dist/Derivia/LICENCIA-Fredoka.txt
+
+      - name: Probar que el juego abre
+        # Si algo falla al arrancar, PyInstaller muestra un cartel de error en vez de la ventana del juego
+        run: |
+          $p = Start-Process dist/Derivia/Derivia.exe -PassThru
+          Start-Sleep -Seconds 40
+          $p.Refresh()
+          $titulo = if ($p.HasExited) { "(se cerró con código $($p.ExitCode))" } else { $p.MainWindowTitle }
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Write-Host "Ventana: $titulo"
+          if ($titulo -ne "Derivia") { throw "El juego no abrió bien: $titulo" }
+
+      - name: Instalar Inno Setup si falta
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          if (-not (Test-Path $iscc)) { throw "No se encontró ISCC.exe" }
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Armar el instalador
+        run: '& $env:ISCC "/DVersion=${{ steps.version.outputs.version }}" instalador.iss'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Derivia-Setup-${{ steps.version.outputs.version }}
+          path: salida/*.exe
+          if-no-files-found: error
+
+      - name: Publicar el Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: salida/*.exe
+          generate_release_notes: true
