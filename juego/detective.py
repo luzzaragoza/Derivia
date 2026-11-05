@@ -3,8 +3,19 @@ decir si está bien y, si no, qué error cometió. Para cortar con la repetició
 
 import sympy as sp
 
-from .ejercicios import Ctx, Ejercicio, Opcion, Paso, g_cadena, g_cadena_producto, g_cadena_trasc, g_cociente, \
-    g_producto, g_sumas, g_tabla
+from .ejercicios import (
+    Ctx,
+    Ejercicio,
+    Opcion,
+    Paso,
+    g_cadena,
+    g_cadena_producto,
+    g_cadena_trasc,
+    g_cociente,
+    g_producto,
+    g_sumas,
+    g_tabla,
+)
 from .gen_integrales import g_int_sumas, g_lineal, g_parciales_cadena, g_partes, g_sust_acomodar
 from .mate import ERRORES, equivalentes, tex, x
 

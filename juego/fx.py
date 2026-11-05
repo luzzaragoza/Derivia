@@ -5,8 +5,8 @@ import random
 
 import pygame
 
-from . import ui
 from . import lienzo as dibujo
+from . import ui
 
 COLORES_CONFETI = [(250, 124, 104), (255, 204, 77), (64, 182, 196), (122, 196, 106), (247, 152, 60),
                    (186, 150, 236), (255, 255, 255)]

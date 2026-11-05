@@ -70,7 +70,7 @@ class Ctx:
 # ======================================================== helpers
 
 def _coef(rng, maxi=6, negativos=True, uno=True):
-    vals = [k for k in range(1 if uno else 2, maxi + 1)]
+    vals = list(range(1 if uno else 2, maxi + 1))
     if negativos:
         vals += [-k for k in range(1 if uno else 2, maxi)]
     return rng.choice(vals)
@@ -438,9 +438,9 @@ def _par_cociente(rng):
 def _uv(rng, par):
     u, du, mu = _pieza(rng, par[0])
     v, dv, mv = _pieza(rng, par[1])
-    if par == ("pot", "poly") or par == ("poly", "pot"):
-        # evitar que se simplifique (x / x)
-        if sp.simplify(u / v).is_polynomial(x) or sp.simplify(v / u).is_polynomial(x):
+    # evitar que se simplifique (x / x)
+    if par in (("pot", "poly"), ("poly", "pot")) and (
+            sp.simplify(u / v).is_polynomial(x) or sp.simplify(v / u).is_polynomial(x)):
             v = x**2 + 1
             dv = 2 * x
             mv = [(2 * x + 1, "constante_no_cero")]

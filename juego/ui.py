@@ -1,22 +1,20 @@
 """Dibujo: colores, fuentes, fórmulas (con matplotlib), texto con fórmulas
 adentro, botones y el cuadro donde se tipea."""
 
+import hashlib
+import importlib.util
 import math
 import os
 import re
+import sys
 
-import matplotlib
 import numpy as np
 import pygame
 
-matplotlib.use("Agg")
-matplotlib.rcParams["mathtext.fontset"] = "cm"
-from matplotlib.font_manager import FontProperties  # noqa: E402
-from matplotlib.mathtext import MathTextParser  # noqa: E402
-
-from . import lienzo as dibujo  # noqa: E402
-from . import pincel  # noqa: E402
-from .lienzo import ALTO, ANCHO, Lienzo, escala  # noqa: E402
+from . import lienzo as dibujo
+from . import pincel
+from .cache import CacheDibujos
+from .lienzo import ALTO, ANCHO, Lienzo, escala
 
 _REEXPORTA = (ANCHO, ALTO)
 
@@ -70,9 +68,11 @@ def aclarar(c, f=0.25):
 
 
 # ------------------------------------------------------------ fuentes
-_DIR_FUENTES = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
+# las letras de los textos son las DejaVu que trae matplotlib (se buscan sin cargar matplotlib, que tarda)
+_DIR_FUENTES = os.path.join(importlib.util.find_spec("matplotlib").submodule_search_locations[0],
+                            "mpl-data", "fonts", "ttf")
 _FREDOKA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fuentes", "FredokaOne-Regular.ttf")
-_FUENTES = {}
+_FUENTES = CacheDibujos()
 _GLIFOS = {}
 
 
@@ -139,7 +139,7 @@ def texto(cadena, tam=22, color=TINTA, negrita=False, mono=False):
     return fuente_para(cadena, tam, negrita, mono).render(cadena, True, color)
 
 
-_CACHE_BORDE = {}
+_CACHE_BORDE = CacheDibujos(limite=1500)
 
 
 def texto_borde(cadena, tam, color, color_borde=BORDE, grosor=3, sombra=True):
@@ -167,7 +167,50 @@ def texto_borde(cadena, tam, color, color_borde=BORDE, grosor=3, sombra=True):
 
 # ------------------------------------------------------------ fórmulas
 _PARSER = None
-_CACHE_MATE = {}
+
+
+def _memoria_matplotlib_fija():
+    """En el juego armado, PyInstaller manda la memoria de matplotlib a una carpeta temporal que se
+    borra al cerrar: así, en cada arranque matplotlib volvía a recorrer todas las fuentes de Windows
+    (pueden ser segundos). Se la manda a una carpeta que queda, una por versión instalada."""
+    if not getattr(sys, "frozen", False) or "matplotlib" in sys.modules:
+        return
+    try:
+        from .rutas import carpeta_datos
+        origen = importlib.util.find_spec("matplotlib").submodule_search_locations[0]
+        marca = hashlib.sha1(origen.encode("utf-8")).hexdigest()[:10]   # otra instalación: otra carpeta
+        carpeta = carpeta_datos() / "matplotlib" / marca
+        carpeta.mkdir(parents=True, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = str(carpeta)
+    except OSError:
+        pass      # se queda con la carpeta temporal: anda igual, solo que tarda más
+
+
+def matplotlib_listo():
+    """Carga matplotlib la primera vez que hace falta (una fórmula o un gráfico) y lo configura.
+    Tarda: por eso no se carga al arrancar el juego sino acá, o de antemano en segundo plano."""
+    _memoria_matplotlib_fija()
+    import matplotlib
+    if matplotlib.get_backend().lower() != "agg":
+        matplotlib.use("Agg")
+        matplotlib.rcParams["mathtext.fontset"] = "cm"
+    return matplotlib
+
+
+def precargar():
+    """Deja matplotlib listo para dibujar fórmulas. Se llama en segundo plano mientras se ve el menú."""
+    _parser()
+    import matplotlib.font_manager  # noqa: F401
+
+
+def _parser():
+    global _PARSER
+    if _PARSER is None:
+        matplotlib_listo()
+        from matplotlib.mathtext import MathTextParser
+        _PARSER = MathTextParser("agg")
+    return _PARSER
+_CACHE_MATE = CacheDibujos(limite=2000)
 
 
 class Formula:
@@ -198,12 +241,11 @@ def formula(tex, tam=28, color=TINTA):
     clave = (tex, tam, color, e)
     if clave in _CACHE_MATE:
         return _CACHE_MATE[clave]
-    global _PARSER
-    if _PARSER is None:
-        _PARSER = MathTextParser("agg")
+    parser = _parser()
+    from matplotlib.font_manager import FontProperties
     try:
         # se dibuja con más puntos por pulgada: queda nítida a la resolución real
-        r = _PARSER.parse(f"${tex}$", dpi=72 * e, prop=FontProperties(size=tam))
+        r = parser.parse(f"${tex}$", dpi=72 * e, prop=FontProperties(size=tam))
         alfa = np.asarray(r.image)
         prof = r.depth / e
     except Exception:
@@ -249,7 +291,7 @@ def fracciones_grandes(tex):
 
 
 # ------------------------------------------------------------ texto con fórmulas
-_CACHE_RICO = {}
+_CACHE_RICO = CacheDibujos(limite=3000)
 
 
 def _trozos(cadena):
@@ -257,7 +299,7 @@ def _trozos(cadena):
     salida = []
     negrita = False
     espacio = False
-    for i, parte in enumerate(re.split(r"(\$[^$]+\$)", cadena)):
+    for parte in re.split(r"(\$[^$]+\$)", cadena):
         if not parte:
             continue
         if parte.startswith("$") and parte.endswith("$") and len(parte) > 1:
@@ -323,13 +365,11 @@ def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.
     ancho_sup = ancho if centrado else ancho_total
     sup = Lienzo(max(1, ancho_sup), max(1, alto_total))
     y = 0
-    for r, (arr, aba, w) in zip(renglones, medidas):
+    for r, (arr, aba, w) in zip(renglones, medidas, strict=True):
         dx = (ancho_sup - w) // 2 if centrado else 0
         for (px, s, a, _) in r:
             sup.blit(s, (dx + px, y + arr - a))
         y += max(int(arr + aba), int(tam * interlineado)) + int(tam * (interlineado - 1))
-    if len(_CACHE_RICO) > 3000:
-        _CACHE_RICO.clear()
     _CACHE_RICO[clave] = sup
     return sup
 
@@ -480,7 +520,7 @@ def parlante(sup, centro, tam, color, activo=True):
     dibujo.polygon(sup, color, [(cx - tam * 0.3, cy - tam * 0.18), (cx, cy - tam * 0.45),
                                      (cx, cy + tam * 0.45), (cx - tam * 0.3, cy + tam * 0.18)])
     if activo:
-        for k, rr in enumerate((0.25, 0.42)):
+        for rr in (0.25, 0.42):
             r = pygame.Rect(0, 0, tam * rr * 2, tam * rr * 2)
             r.center = (cx + tam * 0.02, cy)
             dibujo.arc(sup, color, r, -0.9, 0.9, 3)
@@ -845,7 +885,7 @@ class CampoTexto:
 
 
 # ------------------------------------------------------------ dibujo de regiones (integrales dobles)
-_CACHE_GRAF = {}
+_CACHE_GRAF = CacheDibujos(limite=60)
 
 
 def grafico(spec, tam=300):
@@ -853,7 +893,8 @@ def grafico(spec, tam=300):
     clave = (tuple(sorted((k, str(v)) for k, v in spec.items())), tam, escala())
     if clave in _CACHE_GRAF:
         return _CACHE_GRAF[clave]
-    import matplotlib.patches  # noqa: F401
+    matplotlib_listo()
+    import matplotlib.patches
     import sympy as sp
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
@@ -959,7 +1000,7 @@ class Interruptor:
         self.anim += (objetivo - self.anim) * 0.3
         r = self.rect
         k = round(self.anim * 10) / 10          # (en pasos, así se guardan pocas versiones)
-        color = tuple(int(a + (b - a) * k) for a, b in zip((214, 200, 180), PASTO))
+        color = tuple(int(a + (b - a) * k) for a, b in zip((214, 200, 180), PASTO, strict=True))
         x = r.left + r.height / 2 + self.anim * (r.width - r.height)
         if not (pincel.HAY_SKIA and _pegar(sup, pincel.pista(r.width, r.height, color), r.x, r.y)):
             dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)

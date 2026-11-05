@@ -1,18 +1,24 @@
 """El loop principal: ventana a resolución real, eventos, transiciones, sacudidas y sonido."""
 
+import logging
 import math
 import os
 import random
+import threading
+import time
 
 import pygame
 
-from . import gato, lienzo, paisaje, pincel, ui
+from . import gato, lienzo, pincel, ui
 from . import lienzo as dibujo
+from .cache import CacheDibujos
 from .escenas import Menu, NombreGato
 from .fx import suave
 from .lienzo import ALTO, ANCHO, Lienzo
 from .progreso import Progreso
 from .sonido import sonidos
+
+log = logging.getLogger(__name__)
 
 
 def tamaño_inicial():
@@ -25,17 +31,26 @@ def tamaño_inicial():
     return (int(ANCHO * e), int(ALTO * e))
 
 
+def precargar_en_segundo_plano():
+    """SymPy y matplotlib tardan en cargar y recién hacen falta en los niveles. Se cargan en un hilo
+    aparte mientras ves el menú: el juego arranca enseguida y el primer nivel no espera."""
+    def precargar():
+        time.sleep(0.5)                 # primero que se dibujen tranquilos los primeros cuadros
+        try:
+            from . import mundos, ui
+            from .escenas import nivel  # noqa: F401
+            mundos.precargar()
+            ui.precargar()
+            sonidos.precargar()
+        except Exception:               # si algo falla acá, se carga (y se ve el error) al usarlo
+            pass
+
+    threading.Thread(target=precargar, name="precarga", daemon=True).start()
+
+
 def limpiar_caches():
     """Al cambiar la resolución hay que volver a dibujar letras, fórmulas, islas y al gato."""
-    for cache in (ui._FUENTES, ui._CACHE_BORDE, ui._CACHE_MATE, ui._CACHE_RICO, ui._CACHE_GRAF,
-                  paisaje._CACHE, gato._CACHE):
-        cache.clear()
-    pincel.limpiar()
-    try:
-        from . import escenas
-        escenas._VELO.clear()
-    except Exception:
-        pass
+    CacheDibujos.limpiar_todas()
 
 
 class App:
@@ -57,6 +72,7 @@ class App:
         self.sacudida = 0.0
         self.escena = Menu(self) if p.nombre_gato else NombreGato(self, primera_vez=True)
         sonidos.musica(self.escena.musica)
+        precargar_en_segundo_plano()
 
     # ------------------------------------------------ resolución
     @property
@@ -114,8 +130,8 @@ class App:
         if callable(armar):
             try:
                 armar()
-            except Exception:
-                pass
+            except Exception:      # una pantalla que no se pudo rearmar no tiene que cerrar el juego
+                log.exception("No se pudo rearmar %s", type(self.escena).__name__)
 
     def salir(self):
         self.corriendo = False

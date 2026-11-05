@@ -88,7 +88,7 @@ def _problemas(j):
     """Lista de cosas que se pisan en la pantalla tal como quedó armada."""
     mal = []
     pantalla = pygame.Rect(0, 0, ANCHO, ALTO)
-    botones = [b for b in j.botones[3:]]                     # (los 3 primeros son Salir, Opciones y Reiniciar)
+    botones = j.botones[3:]                     # (los 3 primeros son Salir, Opciones y Reiniciar)
     contenido = [r for s, r in j.capas if isinstance(r, pygame.Rect)]
     if j.paso.tipo == "expresion":
         contenido.append(j.campo.rect)

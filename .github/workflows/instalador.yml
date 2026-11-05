@@ -27,6 +27,7 @@ on:
       - derivia.spec
       - instalador.iss
       - requirements.txt
+      - requisitos-armado.txt
       - tienda/**
       - .github/workflows/instalador.yml
 
@@ -41,9 +42,9 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -73,8 +74,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller pip-licenses
-          pip install skia-python
+          pip install -r requisitos-armado.txt
 
       - name: Armar Derivia con PyInstaller
         run: pyinstaller --noconfirm --clean derivia.spec
@@ -84,7 +84,13 @@ jobs:
           pip-licenses --from=mixed --with-license-file --no-license-path --format=plain-vertical --output-file=dist/Derivia/LICENCIAS.txt
           Copy-Item juego/assets/fuentes/OFL.txt dist/Derivia/LICENCIA-Fredoka.txt
 
-      - name: Probar que el juego abre
+      - name: Autoprueba del juego armado (menú, mapa, tienda y los 49 niveles)
+        run: |
+          $p = Start-Process dist/Derivia/Derivia.exe -ArgumentList "--autoprueba", "autoprueba.txt" -Wait -PassThru
+          Get-Content autoprueba.txt
+          if ($p.ExitCode -ne 0) { throw "La autoprueba falló (código $($p.ExitCode))" }
+
+      - name: Probar que el juego abre normal
         # Si algo falla al arrancar, PyInstaller muestra un cartel de error en vez de la ventana del juego
         run: |
           $p = Start-Process dist/Derivia/Derivia.exe -PassThru
@@ -172,7 +178,7 @@ jobs:
           if ($titulo -ne "Derivia") { throw "El juego instalado desde el paquete no abrió bien: $titulo" }
 
       # ------------------------------------------------------------ resultados
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Derivia-${{ steps.version.outputs.version }}
           path: |
