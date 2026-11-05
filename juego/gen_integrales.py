@@ -5,8 +5,25 @@ from dataclasses import dataclass
 
 import sympy as sp
 
-from .ejercicios import (COS, E, LN, RAIZ, SEN, Ejercicio, elegir, Opcion, Paso, _afuera, _FORMAS, _forma_tex,
-                         _pot_tex, paso_derivada, paso_elegir, paso_numero, paso_primitiva)
+from .ejercicios import (
+    _FORMAS,
+    COS,
+    LN,
+    RAIZ,
+    SEN,
+    E,
+    Ejercicio,
+    Opcion,
+    Paso,
+    _afuera,
+    _forma_tex,
+    _pot_tex,
+    elegir,
+    paso_derivada,
+    paso_elegir,
+    paso_numero,
+    paso_primitiva,
+)
 from .mate import ERRORES, tex, tex_par, x, y
 
 R = sp.Rational
@@ -522,8 +539,8 @@ def g_partes_eleccion(ctx):
 def _resolver_partes(f, u, dv):
     du = sp.diff(u, x)
     v = sp.integrate(dv, x)
-    F = sp.integrate(f, x)
     resto = sp.integrate(sp.expand(v * du), x)
+    F = u * v - resto        # la fórmula de partes ya da la primitiva (integrar f de nuevo era lo más lento)
     errs = [(u * v + resto, "partes_signo"), (u * v, "partes_sin_integral"), (-F, "integral_signo")]
     dv_der = sp.diff(dv, x)
     if dv_der != 0:

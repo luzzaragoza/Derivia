@@ -1,6 +1,7 @@
 """El "profe" que corrige: entiende lo que tipeás, lo compara con la respuesta
 correcta y, si está mal, intenta decir cuál fue el error."""
 
+import functools
 import re
 
 import mpmath
@@ -244,19 +245,28 @@ def _variables(*exprs):
 
 
 def _valores(expr, variables=None):
+    """Valores numéricos de expr en los puntos de prueba (None donde no está definida)."""
+    expr = sp.sympify(expr)
     variables = _variables(expr) if variables is None else variables
-    f = sp.lambdify(variables, expr, modules="mpmath")
+    return _valores_cache(expr, tuple(variables))
+
+
+@functools.lru_cache(maxsize=4096)
+def _valores_cache(expr, variables):
+    # Comparar respuestas es lo que más tarda al armar un nivel. Reemplazar los números directo
+    # (xreplace + evalf) es varias veces más rápido que armar una función con lambdify, y las mismas
+    # expresiones se comparan muchas veces: por eso además se guarda el resultado.
     vals = []
     for i in range(len(_PUNTOS)):
-        punto = [mpmath.mpf(_PUNTOS[(i + 3 * k) % len(_PUNTOS)] + 0.17 * k) for k in range(len(variables))]
+        punto = {v: sp.Float(_PUNTOS[(i + 3 * k) % len(_PUNTOS)] + 0.17 * k, 20) for k, v in enumerate(variables)}
         try:
-            v = mpmath.mpc(f(*punto))
+            v = mpmath.mpc(complex(expr.xreplace(punto).evalf(20)))
             if mpmath.isnan(v.real) or mpmath.isinf(v.real) or mpmath.isnan(v.imag) or mpmath.isinf(v.imag):
                 v = None
-        except Exception:
+        except Exception:   # fuera del dominio (división por cero, infinito complejo...) o no da un número
             v = None
         vals.append(v)
-    return vals
+    return tuple(vals)
 
 
 def _cerca(a, b):

@@ -13,6 +13,7 @@ import time
 
 import pygame
 
+from .cache import CacheDibujos
 from .lienzo import Lienzo, escala
 
 try:
@@ -22,13 +23,9 @@ except Exception:  # sin Skia: el juego anda igual, con dibujos más simples
     skia = None
     HAY_SKIA = False
 
-_CACHE = {}
+_CACHE = CacheDibujos(limite=1500)
 _GASTO = [0.0]          # segundos usados este cuadro creando piezas nuevas
 _PRESUPUESTO = 0.12     # red de seguridad: si en un cuadro se pasa de esto, se dibuja la versión simple
-
-
-def limpiar():
-    _CACHE.clear()
 
 
 def nuevo_cuadro():
@@ -87,8 +84,6 @@ def _pieza(clave, w, h, pintar, margen=0, forzar=False):
     arr = sup.makeImageSnapshot().toarray(colorType=skia.kBGRA_8888_ColorType, alphaType=skia.kUnpremul_AlphaType)
     fis = pygame.image.frombuffer(arr.tobytes(), (W, H), "BGRA").copy()
     pieza = Lienzo.desde(fis, e)
-    if len(_CACHE) > 1500:
-        _CACHE.clear()
     _CACHE[clave] = pieza
     _GASTO[0] += time.perf_counter() - t0
     return pieza

@@ -8,6 +8,7 @@ import random
 import pygame
 
 from . import lienzo as dibujo
+from .cache import CacheDibujos
 from .lienzo import Lienzo
 from .ui import BORDE
 
@@ -20,7 +21,7 @@ NEGRO = (52, 36, 32)
 ROJO_BOCA = (176, 62, 70)
 LAGRIMA = (120, 196, 240)
 
-_CACHE = {}
+_CACHE = CacheDibujos(limite=500)
 ROPA = ()          # lo que tiene puesto el gato en todo el juego (ids de juego/ropa.py)
 OY = 40            # margen de arriba (para sombreros), en unidades de diseño
 
@@ -233,8 +234,6 @@ def superficie(tam, animo="normal", ojos_cerrados=False, cola_paso=0, mirar=(0, 
     e = escala()
     clave = (tam, animo, ojos_cerrados, cola_paso % 16, mirar, ropa, e)
     if clave not in _CACHE:
-        if len(_CACHE) > 500:
-            _CACHE.clear()
         # se dibuja al tamaño real en la pantalla (tam × escala): queda nítido
         _CACHE[clave] = Lienzo.desde(_render(tam * e, animo, ojos_cerrados, cola_paso % 16, mirar, ropa), e)
     return _CACHE[clave]

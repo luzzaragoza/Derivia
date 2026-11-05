@@ -6,12 +6,13 @@ import random
 import numpy as np
 import pygame
 
-from . import pincel, ui
 from . import lienzo as dibujo
+from . import pincel, ui
+from .cache import CacheDibujos
 from .lienzo import Lienzo
 from .ui import ALTO, ANCHO
 
-_CACHE = {}
+_CACHE = CacheDibujos(limite=400)
 
 
 def gradiente(w, h, arriba, abajo):
