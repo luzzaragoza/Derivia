@@ -233,6 +233,16 @@ def escalar_a(sup, ancho_max):
     return dibujo.escalar(sup, (int(sup.get_width() * k), max(1, int(sup.get_height() * k))))
 
 
+def escalar_caja(sup, ancho_max, alto_max=None):
+    """Achica (sin deformar) para que entre en ancho_max × alto_max. Nunca agranda."""
+    k = ancho_max / sup.get_width()
+    if alto_max:
+        k = min(k, alto_max / sup.get_height())
+    if k >= 1:
+        return sup
+    return dibujo.escalar(sup, (max(1, int(sup.get_width() * k)), max(1, int(sup.get_height() * k))))
+
+
 def fracciones_grandes(tex):
     """\\frac -> \\dfrac: las fracciones chiquitas en una línea de texto no se leen."""
     return re.sub(r"(?<![a-z])\\frac", r"\\dfrac", tex)

@@ -880,7 +880,7 @@ class Juego(Escena):
         else:
             txt = f"Saltear (−{self.COSTO_SALTEAR})"
             ok = self.app.progreso.monedas >= self.COSTO_SALTEAR
-        return Boton(rect, txt, self.saltear, (186, 150, 236), TINTA, tam=17, habilitado=ok, sonido="salto")
+        return Boton(rect, txt, self.saltear, (186, 150, 236), TINTA, tam=18, habilitado=ok, sonido="salto")
 
     def saltear(self):
         if self.salteo_usado or self.jefe or self.estado != "pregunta":
@@ -913,20 +913,59 @@ class Juego(Escena):
         elif vistas >= n:
             txt, ok = "No hay más pistas", False
         else:
-            txt, ok = ("Pista (−5 monedas)" if n == 1 else f"Pista {vistas + 1}/{n} (−5 monedas)"), True
-        return Boton(rect, txt, self.pista, SOL, TINTA, tam=19, habilitado=ok, sonido="pista")
+            txt, ok = ("Pista (−5)" if n == 1 else f"Pista {vistas + 1}/{n} (−5)"), True
+        return Boton(rect, txt, self.pista, SOL, TINTA, tam=18, habilitado=ok, sonido="pista")
+
+    # ---------------------------------------------- distribución en la pantalla
+    # Abajo de todo está la franja del gato: su globito (error, pista, charla) o, si no habla,
+    # los botones de Pista y Saltear. El ejercicio va arriba de esa franja y NUNCA se pisa con ella:
+    # si no entra, se va compactando de a poco (menos aire, fórmulas más chicas, pasos en una línea).
+    COMPACTOS = (
+        # aire, alto fórmula, alto gráfico, tam pregunta, tam pasos, pasos en línea, alto opciones, alto "Leo", tam globo
+        dict(aire=1.0, formula=None, grafico=None, pregunta=24, pasos=20, en_linea=False, opcion=84, leo=44, globo=19),
+        dict(aire=0.7, formula=96, grafico=300, pregunta=22, pasos=18, en_linea=False, opcion=72, leo=34, globo=19),
+        dict(aire=0.5, formula=76, grafico=260, pregunta=21, pasos=17, en_linea=True, opcion=62, leo=30, globo=18),
+        dict(aire=0.4, formula=62, grafico=220, pregunta=20, pasos=16, en_linea=True, opcion=54, leo=28, globo=17),
+        dict(aire=0.3, formula=50, grafico=180, pregunta=19, pasos=15, en_linea=True, opcion=48, leo=26, globo=16),
+    )
+    MARGEN = 12          # entre la franja del gato y el borde de abajo
+    ALTO_LADO = 46       # alto de los botones Pista / Saltear
 
     def armar(self):
-        """Calcula la ubicación de todo según el estado actual."""
+        """Calcula la ubicación de todo según el estado actual (lo más compacto que haga falta para que entre)."""
+        for c in self.COMPACTOS:
+            if self._armar(c):
+                return
+
+    def _armar(self, c):
+        """Arma la pantalla con un nivel de compactación. Devuelve True si todo entra sin pisarse."""
         icono = Lienzo(*((36, 36)))
         flecha_reiniciar(icono, (18, 18), 26, BORDE)
         self.botones = [Boton((14, 10, 108, 44), "Salir", self.atras, DURAZNO, tam=19, relieve=4),
                         self.boton_opciones((130, 10, 48, 44)),
                         Boton((186, 10, 48, 44), icono, self.reiniciar, ARENA, relieve=4)]
         self.capas = []
+        respondiendo = self.estado == "pregunta"
+
+        # 1) la franja del gato, de abajo para arriba: así se sabe cuánto lugar le queda al ejercicio
+        self.panel = self._globito(c, respondiendo)
+        if self.panel:
+            limite = self.panel["rect"].top - 10
+        elif respondiendo:
+            r = self._rect_lado(ALTO - self.MARGEN - self.ALTO_LADO)
+            self.botones.append(self._boton_pista(r[0]))
+            self.botones.append(self._boton_saltear(r[1]))
+            limite = r[0].top - 10
+        else:
+            limite = ALTO - self.MARGEN
+        a = c["aire"]
+
+        # 2) el ejercicio, de arriba para abajo
         if self.ej.grafico:
             self.cx, self.ancho = 480, 860
             g = ui.grafico(self.ej.grafico)
+            if c["grafico"]:
+                g = ui.escalar_caja(g, c["grafico"] * 1.07, c["grafico"])
             self.capas.append((g, g.get_rect(topright=(ANCHO - 24, 108))))
         else:
             self.cx, self.ancho = ANCHO // 2, 1100
@@ -937,157 +976,214 @@ class Juego(Escena):
         del_cuaderno = self.i in self.repasos or (self.practica and self.app.progreso.en_cuaderno(self.ej.clave))
         if del_cuaderno and not (self.practica and self.mundo is None):   # en el repaso del cuaderno ya lo dice el título
             consigna = "**Repaso del cuaderno** · " + consigna
-        s = ui.rico(consigna, 20, SUAVE, ancho=ancho, color_negrita=ui.CORAL_OSC)
+        s = ui.rico(consigna, 20 if a == 1 else 18, SUAVE, ancho=ancho, color_negrita=ui.CORAL_OSC)
         self.capas.append((s, s.get_rect(midtop=(cx, y))))
-        y += s.get_height() + 4
+        y += s.get_height() + 4 * a
         f = ui.formula(self.ej.formula, 46)
-        s = ui.escalar_a(f.sup, ancho)
+        s = ui.escalar_caja(f.sup, ancho, c["formula"])
         self.capas.append((s, s.get_rect(midtop=(cx, y))))
-        y += s.get_height() + 14
-        for k in range(self.paso_i):
-            p = self.ej.pasos[k]
-            mal = k in self.pasos_revelados
-            s = ui.escalar_a(ui.rico(p.resumen, 20, ROSA_OSC if mal else MENTA_OSC, ancho=ancho - 100), ancho - 60)
-            r = s.get_rect(midtop=(cx + 16, y))
-            self.capas.append((s, r))
-            self.capas.append(("cruz" if mal else "tilde", (r.left - 20, r.centery)))
-            y += s.get_height() + 6
+        y += s.get_height() + 14 * a
         if self.paso_i:
-            y += 6
+            y = self._pasos_hechos(c, y)
         n_pasos = len(self.ej.pasos)
         pregunta = self.paso.pregunta
         if n_pasos > 1:
             pregunta = f"**Paso {self.paso_i + 1} de {n_pasos}.** " + pregunta
-        s = ui.rico(pregunta, 24, TINTA, ancho=ancho - 150, color_negrita=LAVANDA_OSC)
+        s = ui.rico(pregunta, c["pregunta"], TINTA, ancho=ancho - 150, color_negrita=LAVANDA_OSC)
         insignia = cartelito_consigna(self.es_logica)
         ancho_ins = insignia.get_width() - 12          # (la insignia trae 6 px de margen para su sombra)
         total = ancho_ins + 12 + s.get_width()
         x_ins = cx - total // 2
         self.capas.append((insignia, insignia.get_rect(topleft=(x_ins - 6, y + 1 - 6))))
         self.capas.append((s, s.get_rect(topleft=(x_ins + ancho_ins + 12, y))))
-        y += max(s.get_height(), 30) + 16
+        y += max(s.get_height(), insignia.get_height() - 5) + 16 * a     # (la insignia arranca 5 px más arriba)
 
-        respondiendo = self.estado == "pregunta"
         if self.paso.tipo == "expresion":
-            pre = ui.escalar_a(ui.formula(ui.fracciones_grandes(self.paso.prefijo), 30).sup, 380) \
-                if self.paso.prefijo else None
-            ancho_campo = min(560, ancho - 40 - (pre.get_width() + 14 if pre else 0))
-            pw = pre.get_width() + 14 if pre else 0
-            x0 = cx - (pw + ancho_campo) // 2
-            alto_campo = max(58, pre.get_height() + 6) if pre else 58
-            if pre:
-                self.capas.append((pre, pre.get_rect(midleft=(x0, y + alto_campo // 2))))
-            self.campo.rect = pygame.Rect(x0 + pw, y + (alto_campo - 58) // 2, ancho_campo, 58)
-            self.campo.habilitado = respondiendo
-            y += alto_campo + 8
-            self.y_preview = y
-            y += 44
-            if respondiendo:
-                grupos = self._teclado()
-                hueco = 16   # espacio entre grupos
-                teclas = []
-                for nombre, lista in grupos:
-                    for et, ins, ret in lista:
-                        sup_et = ui.formula(et, 22).sup
-                        teclas.append((nombre, sup_et, max(46, sup_et.get_width() + 22), ins, ret))
-                total = sum(t[2] for t in teclas) + 6 * len(teclas) + hueco * len(grupos) + 58 + 6 + 56
-                x = cx - total // 2
-                anterior = None
-                for nombre, sup_et, w, ins, ret in teclas:
-                    if anterior is not None and nombre != anterior:
-                        x += hueco
-                    anterior = nombre
-                    self.botones.append(Boton((x, y, w, 40), sup_et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
-                                              COLORES_TECLADO[nombre], radio=10, relieve=4, sonido="tecla"))
-                    x += w + 6
-                x += hueco
-                abierto = self.app.progreso.teclado_numerico
-                self.botones.append(Boton((x, y, 58, 40), "123", self.alternar_numeros,
-                                          SOL if abierto else DURAZNO, tam=17, radio=10, relieve=4, sonido="tecla"))
-                self.botones.append(Boton((x + 64, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
-                                          radio=10, relieve=4, sonido="tecla"))
-                y += 50
-                if abierto:
-                    variables = [str(v) for v in self.paso.variables]
-                    numeros = NUMEROS + [None] + variables + [None, "←", "→", "⌫"]
-                    total = (len(numeros) - 2) * 52 - 6 + 2 * hueco
-                    x = cx - total // 2
-                    for n in numeros:
-                        if n is None:      # separación entre números, letras y flechas
-                            x += hueco
-                            continue
-                        accion = {"←": self.campo.izquierda, "→": self.campo.derecha, "⌫": self.campo.borrar_atras}.get(
-                            n, (lambda n=n: self.campo.insertar(n)))
-                        self.botones.append(Boton((x, y, 46, 40), n, accion, TARJETA, tam=19, radio=10, relieve=4,
-                                                  sonido="tecla"))
-                        x += 52
-                    y += 50
-                y += 6
-                x = cx - (290 + 14 + 190 + 14 + 230) // 2
-                self.botones.append(self._boton_pista((x, y, 290, 52)))
-                self.botones.append(self._boton_saltear((x + 304, y, 190, 52)))
-                self.botones.append(Boton((x + 508, y, 230, 52), "Comprobar  ↵", self.comprobar, CORAL, CREMA,
-                                          tam=21, sonido=None))
-                y += 64
+            y = self._armar_respuesta(c, y, respondiendo)
         else:
-            ops = self.paso.opciones
-            con_texto = any(o.texto for o in ops)
-            alto = 62 if con_texto else 84
-            w = min(540, (ancho - 18) // 2)
-            x0 = cx - (2 * w + 18) // 2
-            self.rect_opciones = {}
-            for k, o in enumerate(ops):
-                fila, col = divmod(k, 2)
-                rect = pygame.Rect(x0 + col * (w + 18), y + fila * (alto + 16), w, alto)
-                contenido = o.texto if o.texto else ui.formula(ui.fracciones_grandes(o.tex), 28).sup
-                b = Boton(rect, contenido, (lambda k=k: self.elegir(k)), TARJETA, tam=21,
-                          tecla=[pygame.K_1 + k, pygame.K_KP1 + k], habilitado=respondiendo and k not in self.marcadas,
-                          etiqueta_tecla=str(k + 1), sonido=None, relieve=6)
-                b.marcado = self.marcadas.get(k)
-                b.t_marcado = self.t_marcas.get(k, 0) if hasattr(self, "t_marcas") else 0
-                self.rect_opciones[k] = rect
-                self.botones.append(b)
-            y += ((len(ops) + 1) // 2) * (alto + 16)
-            if respondiendo:
-                self.botones.append(self._boton_pista((cx - 247, y, 290, 46)))
-                self.botones.append(self._boton_saltear((cx + 57, y, 190, 46)))
-                y += 58
-        # globito del gato: feedback, pista o charla
-        self.panel = None
-        y += 6
-        if self.feedback:
-            self.panel = self._panel_feedback(y)
-        elif self.pistas_vistas:
-            cuerpo = "\n".join(self.paso.pistas[:self.pistas_vistas])
-            self.panel = self._panel(y, "Pista", cuerpo, (255, 246, 214), SOL_OSC)
-        elif self.charla and self.t_charla > 0:
-            self.panel = self._panel(max(y, ALTO - 130), self.charla, "", TARJETA, ui.CORAL_OSC)
+            y = self._armar_opciones(c, y, respondiendo)
+        contenido = [r for s, r in self.capas if isinstance(r, pygame.Rect)]
+        fondo = max([y] + [r.bottom for r in contenido])
+        # ningún botón puede tapar el ejercicio (por ejemplo, el teclado al gráfico de la región)
+        tapa = any(b.rect.colliderect(r) for b in self.botones[3:] for r in contenido)
+        return fondo <= limite and not tapa
 
-    def _panel(self, y, titulo, cuerpo, color, color_titulo, con_boton=False):
+    def _rect_lado(self, y):
+        """Lugar de los botones Pista y Saltear cuando el gato no está hablando: abajo, al lado del gato."""
+        w = 236
+        x = max(X_GLOBO + 10, self.cx - (2 * w + 14) // 2)
+        return pygame.Rect(x, y, w, self.ALTO_LADO), pygame.Rect(x + w + 14, y, w, self.ALTO_LADO)
+
+    def _pasos_hechos(self, c, y):
+        """Lo que ya resolviste en los pasos anteriores (con tilde o cruz)."""
+        cx, ancho = self.cx, self.ancho
+        hechos = [(self.ej.pasos[k].resumen, k in self.pasos_revelados) for k in range(self.paso_i)]
+        if c["en_linea"]:
+            # todos en un renglón (o los que entren, achicados)
+            piezas = [ui.rico(r, c["pasos"], ROSA_OSC if mal else MENTA_OSC, ancho=ancho) for r, mal in hechos]
+            w = sum(p.get_width() + 30 for p in piezas) + 24 * (len(piezas) - 1)
+            k = min(1.0, (ancho - 40) / max(1, w))
+            if k < 1:
+                piezas = [ui.escalar_a(p, max(1, int(p.get_width() * k))) for p in piezas]
+            alto = max(p.get_height() for p in piezas)
+            x = cx - int(w * k) // 2
+            for p, (_, mal) in zip(piezas, hechos):
+                x += 24
+                self.capas.append(("cruz" if mal else "tilde", (x - 4, y + alto // 2)))
+                r = p.get_rect(midleft=(x + 10, y + alto // 2))
+                self.capas.append((p, r))
+                x = r.right + 24
+            return y + alto + 10 * c["aire"]
+        for resumen, mal in hechos:
+            s = ui.escalar_a(ui.rico(resumen, c["pasos"], ROSA_OSC if mal else MENTA_OSC, ancho=ancho - 100),
+                             ancho - 60)
+            r = s.get_rect(midtop=(cx + 16, y))
+            self.capas.append((s, r))
+            self.capas.append(("cruz" if mal else "tilde", (r.left - 20, r.centery)))
+            y += s.get_height() + 6 * c["aire"]
+        return y + 6 * c["aire"]
+
+    def _armar_respuesta(self, c, y, respondiendo):
+        """Cuadro de texto (con Comprobar al lado), la línea "Leo:" y el teclado de fórmulas."""
+        cx, ancho = self.cx, self.ancho
+        w_comprobar = 196 if respondiendo else 0
+        hueco_comp = 12 if respondiendo else 0
+        pre = None
+        if self.paso.prefijo:
+            pre = ui.formula(ui.fracciones_grandes(self.paso.prefijo), 30).sup
+            # el cuadro de texto tiene que quedar cómodo para escribir: el prefijo se achica si hace falta
+            pre = ui.escalar_caja(pre, max(120, min(380, ancho - 40 - 400 - w_comprobar - hueco_comp - 14)),
+                                  70 if c["aire"] == 1 else 56)
+        pw = pre.get_width() + 14 if pre else 0
+        ancho_campo = min(560, ancho - 40 - pw - w_comprobar - hueco_comp)
+        x0 = cx - (pw + ancho_campo + hueco_comp + w_comprobar) // 2
+        alto_campo = max(58, pre.get_height() + 6) if pre else 58
+        if pre:
+            self.capas.append((pre, pre.get_rect(midleft=(x0, y + alto_campo // 2))))
+        self.campo.rect = pygame.Rect(x0 + pw, y + (alto_campo - 58) // 2, ancho_campo, 58)
+        self.campo.habilitado = respondiendo
+        if respondiendo:
+            self.botones.append(Boton((self.campo.rect.right + hueco_comp, self.campo.rect.top + 3, w_comprobar, 52),
+                                      "Comprobar  ↵", self.comprobar, CORAL, CREMA, tam=20, sonido=None))
+        y += alto_campo + 8 * c["aire"]
+        self.y_preview = y
+        y += c["leo"]
+        if not respondiendo:
+            return y
+        grupos = self._teclado()
+        hueco = 16   # espacio entre grupos
+        teclas = []
+        for nombre, lista in grupos:
+            for et, ins, ret in lista:
+                sup_et = ui.formula(et, 22).sup
+                teclas.append((nombre, sup_et, max(46, sup_et.get_width() + 22), ins, ret))
+        total = sum(t[2] for t in teclas) + 6 * len(teclas) + hueco * len(grupos) + 58 + 6 + 56
+        x = self._x_fila(total)
+        anterior = None
+        for nombre, sup_et, w, ins, ret in teclas:
+            if anterior is not None and nombre != anterior:
+                x += hueco
+            anterior = nombre
+            self.botones.append(Boton((x, y, w, 40), sup_et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
+                                      COLORES_TECLADO[nombre], radio=10, relieve=4, sonido="tecla"))
+            x += w + 6
+        x += hueco
+        abierto = self.app.progreso.teclado_numerico
+        self.botones.append(Boton((x, y, 58, 40), "123", self.alternar_numeros,
+                                  SOL if abierto else DURAZNO, tam=17, radio=10, relieve=4, sonido="tecla"))
+        self.botones.append(Boton((x + 64, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
+                                  radio=10, relieve=4, sonido="tecla"))
+        y += 48
+        if abierto:
+            variables = [str(v) for v in self.paso.variables]
+            numeros = NUMEROS + [None] + variables + [None, "←", "→", "⌫"]
+            total = (len(numeros) - 2) * 52 - 6 + 2 * hueco
+            x = self._x_fila(total)
+            for n in numeros:
+                if n is None:      # separación entre números, letras y flechas
+                    x += hueco
+                    continue
+                accion = {"←": self.campo.izquierda, "→": self.campo.derecha, "⌫": self.campo.borrar_atras}.get(
+                    n, (lambda n=n: self.campo.insertar(n)))
+                self.botones.append(Boton((x, y, 46, 40), n, accion, TARJETA, tam=19, radio=10, relieve=4,
+                                          sonido="tecla"))
+                x += 52
+            y += 48
+        return y
+
+    def _x_fila(self, total):
+        """Dónde empieza una fila del teclado: centrada en el ejercicio, pero sin salirse de la pantalla."""
+        return max(16, min(self.cx - total // 2, ANCHO - 16 - total))
+
+    def _armar_opciones(self, c, y, respondiendo):
+        cx, ancho = self.cx, self.ancho
+        ops = self.paso.opciones
+        con_texto = any(o.texto for o in ops)
+        alto = min(62, c["opcion"]) if con_texto else c["opcion"]
+        hueco = max(8, round(16 * c["aire"]))
+        w = min(540, (ancho - 18) // 2)
+        x0 = cx - (2 * w + 18) // 2
+        self.rect_opciones = {}
+        for k, o in enumerate(ops):
+            fila, col = divmod(k, 2)
+            rect = pygame.Rect(x0 + col * (w + 18), y + fila * (alto + hueco), w, alto)
+            if o.texto:
+                contenido = o.texto
+            else:   # la fórmula se achica para entrar en el botón
+                contenido = ui.escalar_caja(ui.formula(ui.fracciones_grandes(o.tex), 28).sup, w - 70, alto - 12)
+            b = Boton(rect, contenido, (lambda k=k: self.elegir(k)), TARJETA, tam=21,
+                      tecla=[pygame.K_1 + k, pygame.K_KP1 + k], habilitado=respondiendo and k not in self.marcadas,
+                      etiqueta_tecla=str(k + 1), sonido=None, relieve=6)
+            b.marcado = self.marcadas.get(k)
+            b.t_marcado = self.t_marcas.get(k, 0) if hasattr(self, "t_marcas") else 0
+            self.rect_opciones[k] = rect
+            self.botones.append(b)
+        return y + ((len(ops) + 1) // 2) * (alto + hueco) - hueco
+
+    # ---------------------------------------------- el globito del gato
+    def _globito(self, c, respondiendo):
+        """Feedback, pista o charla. Mientras respondés, Pista y Saltear van adentro, a la derecha."""
+        lado = respondiendo
+        if self.feedback:
+            fb = self.feedback
+            if fb["tipo"] == "bien":
+                return self._panel(c, fb["titulo"], fb["cuerpo"], (232, 248, 222), MENTA_OSC,
+                                   con_boton=self.auto_t is None, lado=lado)
+            if fb["tipo"] == "info":
+                return self._panel(c, fb["titulo"], fb["cuerpo"], TARJETA, SUAVE, lado=lado)
+            return self._panel(c, fb["titulo"], fb["cuerpo"], (255, 234, 226), ROSA_OSC,
+                               con_boton=self.estado in ("revelado", "sin_vidas"), lado=lado)
+        if self.pistas_vistas:
+            cuerpo = "\n".join(self.paso.pistas[:self.pistas_vistas])
+            return self._panel(c, "Pista", cuerpo, (255, 246, 214), SOL_OSC, lado=lado)
+        if self.charla and self.t_charla > 0:
+            return self._panel(c, self.charla, "", TARJETA, ui.CORAL_OSC, lado=lado)
+        return None
+
+    def _panel(self, c, titulo, cuerpo, color, color_titulo, con_boton=False, lado=False):
+        """El globito, pegado abajo al lado del gato. `lado`: con Pista y Saltear adentro, a la derecha."""
         ancho = ANCHO - X_GLOBO - 24
-        ancho_txt = ancho - 50 - (210 if con_boton else 0)
-        t = ui.texto(titulo, 23, color_titulo, negrita=True)
-        c = ui.rico(cuerpo, 19, TINTA, ancho=ancho_txt, color_negrita=color_titulo) if cuerpo else None
-        alto = 22 + t.get_height() + (c.get_height() + 8 if c else 0) + 14
-        alto = max(alto, 86 if con_boton else 0)
-        # el globito va abajo, al lado del gato (pero sin tapar el ejercicio)
-        rect = pygame.Rect(X_GLOBO, max(y, ALTO - 16 - alto), ancho, alto)
-        if rect.bottom > ALTO - 12:
-            rect.bottom = ALTO - 12
-        if con_boton:
+        w_lado = 236 if lado else (210 if con_boton else 0)
+        ancho_txt = ancho - 50 - w_lado
+        t = ui.rico(f"**{titulo}**", c["globo"] + 4, color_titulo, ancho=ancho_txt, color_negrita=color_titulo)
+        cu = ui.rico(cuerpo, c["globo"], TINTA, ancho=ancho_txt, color_negrita=color_titulo) if cuerpo else None
+        alto = 22 + t.get_height() + (cu.get_height() + 8 if cu else 0) + 14
+        if lado:
+            alto = max(alto, 2 * self.ALTO_LADO + 10 + 28)
+        elif con_boton:
+            alto = max(alto, 86)
+        rect = pygame.Rect(X_GLOBO, ALTO - self.MARGEN - alto, ancho, alto)
+        if lado:
+            x = rect.right - 22 - (w_lado - 22)
+            y = rect.centery - self.ALTO_LADO - 5
+            self.botones.append(self._boton_pista(pygame.Rect(x, y, w_lado - 22, self.ALTO_LADO)))
+            self.botones.append(self._boton_saltear(pygame.Rect(x, y + self.ALTO_LADO + 10, w_lado - 22,
+                                                                self.ALTO_LADO)))
+        elif con_boton:
             b = Boton((rect.right - 206, rect.centery - 28, 184, 54), "Continuar  ↵", self.continuar, LAVANDA,
                       tam=20, tecla=[pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE], sonido="paso")
             self.botones.append(b)
-        return dict(rect=rect, color=color, titulo=t, cuerpo=c, borde=color_titulo)
-
-    def _panel_feedback(self, y):
-        fb = self.feedback
-        if fb["tipo"] == "bien":
-            return self._panel(y, fb["titulo"], fb["cuerpo"], (232, 248, 222), MENTA_OSC, con_boton=self.auto_t is None)
-        if fb["tipo"] == "info":
-            return self._panel(y, fb["titulo"], fb["cuerpo"], TARJETA, SUAVE)
-        return self._panel(y, fb["titulo"], fb["cuerpo"], (255, 234, 226), ROSA_OSC,
-                           con_boton=self.estado in ("revelado", "sin_vidas"))
+        return dict(rect=rect, color=color, titulo=t, cuerpo=cu, borde=color_titulo)
 
     # ---------------------------------------------- acciones
     def atras(self):
@@ -1496,7 +1592,7 @@ class Juego(Escena):
             if p["cuerpo"]:
                 sup.blit(p["cuerpo"], (p["rect"].left + 22, p["rect"].top + 22 + p["titulo"].get_height()))
             for b in self.botones:
-                if b.rect.colliderect(p["rect"]) and b.rect.top > p["rect"].top:
+                if p["rect"].contains(b.rect):      # los botones del globito (Pista, Saltear, Continuar)
                     b.dibujar(sup)
         self._dibujar_encabezado(sup)
         for b in self.botones[:3]:
