@@ -1,5 +1,6 @@
 """El loop principal: ventana a resolución real, eventos, transiciones, sacudidas y sonido."""
 
+import logging
 import math
 import os
 import random
@@ -16,6 +17,8 @@ from .fx import suave
 from .lienzo import ALTO, ANCHO, Lienzo
 from .progreso import Progreso
 from .sonido import sonidos
+
+log = logging.getLogger(__name__)
 
 
 def tamaño_inicial():
@@ -38,6 +41,7 @@ def precargar_en_segundo_plano():
             from .escenas import nivel  # noqa: F401
             mundos.precargar()
             ui.precargar()
+            sonidos.precargar()
         except Exception:               # si algo falla acá, se carga (y se ve el error) al usarlo
             pass
 
@@ -126,8 +130,8 @@ class App:
         if callable(armar):
             try:
                 armar()
-            except Exception:
-                pass
+            except Exception:      # una pantalla que no se pudo rearmar no tiene que cerrar el juego
+                log.exception("No se pudo rearmar %s", type(self.escena).__name__)
 
     def salir(self):
         self.corriendo = False

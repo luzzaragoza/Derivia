@@ -273,7 +273,7 @@ class PantallaNivel:
                 piezas = [ui.escalar_a(p, max(1, int(p.get_width() * k))) for p in piezas]
             alto = max(p.get_height() for p in piezas)
             x = cx - int(w * k) // 2
-            for p, (_, mal) in zip(piezas, hechos):
+            for p, (_, mal) in zip(piezas, hechos, strict=True):
                 x += 24
                 self.capas.append(("cruz" if mal else "tilde", (x - 4, y + alto // 2)))
                 r = p.get_rect(midleft=(x + 10, y + alto // 2))

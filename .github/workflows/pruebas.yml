@@ -1,17 +1,30 @@
-# Pruebas rápidas en cada cambio: que en ningún nivel se pisen los botones, el globito del gato y el ejercicio.
+# Pruebas en cada cambio: análisis del código, guardado, ejercicios del detective, que nada se pise
+# en la pantalla y el juego entero jugado de punta a punta (versión corta).
 name: Pruebas
 
 on:
   push:
     branches: ["**"]
-    paths: ["juego/**", "tests/**", "main.py", "requirements.txt", ".github/workflows/pruebas.yml"]
+    paths: ["juego/**", "tests/**", "main.py", "requirements.txt", "requisitos-armado.txt", "pyproject.toml",
+            ".github/workflows/pruebas.yml"]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  pantalla:
+  analisis:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Análisis del código (ruff)
+        run: pipx run ruff==0.16.9 check .
+
+  juego:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,6 +34,14 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt skia-python
+          pip install -r requisitos-armado.txt
+      - name: Guardado del progreso
+        run: python tests/test_progreso.py
+      - name: Detective de errores
+        run: python tests/test_detective.py
       - name: Que nada se pise en la pantalla
         run: python tests/test_superposicion.py 3
+      - name: El juego de punta a punta (versión corta)
+        run: python tests/test_e2e.py --rapido
+      - name: Autoprueba (los 49 niveles)
+        run: python main.py --autoprueba

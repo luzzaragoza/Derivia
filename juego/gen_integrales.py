@@ -416,7 +416,7 @@ def _armar_sust(rng, acomodar):
             k = c
         f = k * h.h(g) * nucleo
         F = sp.Rational(k, c) * h.H(g)
-        if not f.has(g) and not (t == "ln"):
+        if not f.has(g) and t != "ln":
             continue
         return t, g, nucleo, c, h, k, f, F
 

@@ -174,8 +174,8 @@ def parsear(texto, variables=(x,), permitir_c=False, tal_cual=False):
             locales["c"] = C
         expr = parse_expr(s, local_dict=locales, global_dict=dict(_GLOBALES),
                           transformations=_TRANSFORMACIONES, evaluate=not tal_cual)
-    except Exception:
-        raise ErrorEntrada("No entiendo la fórmula. ¿Falta algún paréntesis o un signo?")
+    except Exception as e:
+        raise ErrorEntrada("No entiendo la fórmula. ¿Falta algún paréntesis o un signo?") from e
     if not isinstance(expr, sp.Basic):
         raise ErrorEntrada("No entiendo la fórmula.")
     expr = _evaluar_numeros(expr) if tal_cual else sp.sympify(expr)
@@ -279,7 +279,7 @@ def equivalentes(a, b):
     vs = _variables(a, b)
     va, vb = _valores(a, vs), _valores(b, vs)
     validos = 0
-    for p, q in zip(va, vb):
+    for p, q in zip(va, vb, strict=True):
         if q is None:
             continue
         if p is None or not _cerca(p, q):
@@ -299,7 +299,7 @@ def _razon_constante(a, b):
     va, vb = _valores(a, vs), _valores(b, vs)
     k = None
     n = 0
-    for p, q in zip(va, vb):
+    for p, q in zip(va, vb, strict=True):
         if p is None or q is None or abs(q) < 1e-9:
             continue
         r = p / q
@@ -320,7 +320,7 @@ def _difiere_en_constante(a, b):
     va, vb = _valores(a, vs), _valores(b, vs)
     c = None
     n = 0
-    for p, q in zip(va, vb):
+    for p, q in zip(va, vb, strict=True):
         if p is None or q is None:
             continue
         d = p - q

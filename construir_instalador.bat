@@ -9,8 +9,7 @@ if not exist .venv (
 )
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
-pip install -r requirements.txt pyinstaller pip-licenses
-pip install skia-python || echo (No se pudo instalar Skia: el juego va a usar los graficos simples)
+pip install -r requisitos-armado.txt
 pyinstaller --noconfirm --clean derivia.spec || goto error
 pip-licenses --from=mixed --with-license-file --no-license-path --format=plain-vertical --output-file=dist\Derivia\LICENCIAS.txt
 copy /y juego\assets\fuentes\OFL.txt dist\Derivia\LICENCIA-Fredoka.txt >nul

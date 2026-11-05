@@ -126,11 +126,11 @@ def _peluca_rosa(lz):
     K, G = lz.K, lz.G
     formas = [("e", lz.R(12, 50, 38, 104)), ("e", lz.R(150, 50, 38, 104)), ("e", lz.R(22, 14, 156, 70))]
     flequillo = [(46 + k * 18, 60) for k in range(7)]
-    for tipo, r in formas:
+    for _tipo, r in formas:
         lz.d.ellipse(lz.s, BORDE, r.inflate(G * 2, G * 2))
     for x, y in flequillo:
         lz.d.circle(lz.s, BORDE, lz.P(x, y), 11 * K + G)
-    for tipo, r in formas:
+    for _tipo, r in formas:
         lz.d.ellipse(lz.s, rosa, r)
     for x, y in flequillo:
         lz.d.circle(lz.s, rosa, lz.P(x, y), 11 * K)
@@ -417,7 +417,7 @@ def _cadena_oro(lz):
 
 
 def _collar_corazon(lz):
-    for (x1, y1), (x2, y2) in zip(_parabola(66, 134, 134, 12, 9), _parabola(66, 134, 134, 12, 9)[1:]):
+    for (x1, y1), (x2, y2) in zip(_parabola(66, 134, 134, 12, 9), _parabola(66, 134, 134, 12, 9)[1:], strict=False):
         _linea(lz, (x1, y1), (x2, y2), PLATA, 2.5)
     pts = []
     for k in range(24):

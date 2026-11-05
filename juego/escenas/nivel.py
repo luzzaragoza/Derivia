@@ -466,10 +466,8 @@ class Juego(PantallaNivel, Escena):
                 e.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
             self.continuar()
             return True
-        for b in list(self.botones):
-            if b.evento(e):
-                return True
-        return False
+        # list(): un botón puede cambiar la lista al apretarlo (por ejemplo, rearmando la pantalla)
+        return any(b.evento(e) for b in list(self.botones))
 
     def actualizar(self, dt):
         self.t += dt

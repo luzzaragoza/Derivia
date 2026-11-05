@@ -19,8 +19,8 @@ import sympy as sp  # noqa: E402
 from matplotlib.mathtext import MathTextParser  # noqa: E402
 
 from juego import mundos as mu  # noqa: E402
-from juego.ui import espaciar_integrales  # noqa: E402
 from juego.mate import ERRORES, C, equivalentes, parsear, x, y  # noqa: E402
+from juego.ui import espaciar_integrales  # noqa: E402
 
 _parser = MathTextParser("path")
 _vistos = set()

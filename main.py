@@ -18,6 +18,10 @@ def _icono():
 
 
 def main():
+    if "--autoprueba" in sys.argv:
+        from juego import autoprueba
+        resto = sys.argv[sys.argv.index("--autoprueba") + 1:]
+        sys.exit(autoprueba.correr(resto[0] if resto else None))
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
     # al agrandar la ventana o en pantalla completa: suavizar en vez de pixelar
     # Windows: que no estire la ventana por su cuenta (eso la ponía borrosa); la dibujamos nosotros

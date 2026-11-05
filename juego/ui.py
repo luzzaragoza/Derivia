@@ -1,10 +1,12 @@
 """Dibujo: colores, fuentes, fórmulas (con matplotlib), texto con fórmulas
 adentro, botones y el cuadro donde se tipea."""
 
+import hashlib
 import importlib.util
 import math
 import os
 import re
+import sys
 
 import numpy as np
 import pygame
@@ -167,9 +169,27 @@ def texto_borde(cadena, tam, color, color_borde=BORDE, grosor=3, sombra=True):
 _PARSER = None
 
 
+def _memoria_matplotlib_fija():
+    """En el juego armado, PyInstaller manda la memoria de matplotlib a una carpeta temporal que se
+    borra al cerrar: así, en cada arranque matplotlib volvía a recorrer todas las fuentes de Windows
+    (pueden ser segundos). Se la manda a una carpeta que queda, una por versión instalada."""
+    if not getattr(sys, "frozen", False) or "matplotlib" in sys.modules:
+        return
+    try:
+        from .rutas import carpeta_datos
+        origen = importlib.util.find_spec("matplotlib").submodule_search_locations[0]
+        marca = hashlib.sha1(origen.encode("utf-8")).hexdigest()[:10]   # otra instalación: otra carpeta
+        carpeta = carpeta_datos() / "matplotlib" / marca
+        carpeta.mkdir(parents=True, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = str(carpeta)
+    except OSError:
+        pass      # se queda con la carpeta temporal: anda igual, solo que tarda más
+
+
 def matplotlib_listo():
     """Carga matplotlib la primera vez que hace falta (una fórmula o un gráfico) y lo configura.
     Tarda: por eso no se carga al arrancar el juego sino acá, o de antemano en segundo plano."""
+    _memoria_matplotlib_fija()
     import matplotlib
     if matplotlib.get_backend().lower() != "agg":
         matplotlib.use("Agg")
@@ -279,7 +299,7 @@ def _trozos(cadena):
     salida = []
     negrita = False
     espacio = False
-    for i, parte in enumerate(re.split(r"(\$[^$]+\$)", cadena)):
+    for parte in re.split(r"(\$[^$]+\$)", cadena):
         if not parte:
             continue
         if parte.startswith("$") and parte.endswith("$") and len(parte) > 1:
@@ -345,7 +365,7 @@ def rico(cadena, tam=22, color=TINTA, ancho=900, centrado=False, interlineado=1.
     ancho_sup = ancho if centrado else ancho_total
     sup = Lienzo(max(1, ancho_sup), max(1, alto_total))
     y = 0
-    for r, (arr, aba, w) in zip(renglones, medidas):
+    for r, (arr, aba, w) in zip(renglones, medidas, strict=True):
         dx = (ancho_sup - w) // 2 if centrado else 0
         for (px, s, a, _) in r:
             sup.blit(s, (dx + px, y + arr - a))
@@ -500,7 +520,7 @@ def parlante(sup, centro, tam, color, activo=True):
     dibujo.polygon(sup, color, [(cx - tam * 0.3, cy - tam * 0.18), (cx, cy - tam * 0.45),
                                      (cx, cy + tam * 0.45), (cx - tam * 0.3, cy + tam * 0.18)])
     if activo:
-        for k, rr in enumerate((0.25, 0.42)):
+        for rr in (0.25, 0.42):
             r = pygame.Rect(0, 0, tam * rr * 2, tam * rr * 2)
             r.center = (cx + tam * 0.02, cy)
             dibujo.arc(sup, color, r, -0.9, 0.9, 3)
@@ -980,7 +1000,7 @@ class Interruptor:
         self.anim += (objetivo - self.anim) * 0.3
         r = self.rect
         k = round(self.anim * 10) / 10          # (en pasos, así se guardan pocas versiones)
-        color = tuple(int(a + (b - a) * k) for a, b in zip((214, 200, 180), PASTO))
+        color = tuple(int(a + (b - a) * k) for a, b in zip((214, 200, 180), PASTO, strict=True))
         x = r.left + r.height / 2 + self.anim * (r.width - r.height)
         if not (pincel.HAY_SKIA and _pegar(sup, pincel.pista(r.width, r.height, color), r.x, r.y)):
             dibujo.rect(sup, BORDE, r.inflate(6, 6), border_radius=r.height)

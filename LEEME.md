@@ -143,40 +143,57 @@ Si venías jugando cuando el juego se llamaba Calculandia, la primera vez que ab
 ## Para programar
 
 ```
+main.py               arranca el juego (con --autoprueba recorre todo y se cierra: lo usa GitHub)
+juego/app.py          la ventana, el bucle principal, las transiciones y la precarga en segundo plano
+juego/escenas/        una pantalla por archivo; se cargan recién al usarlas
+  base.py               Escena (la clase madre de todas) y piezas que usan varias
+  menu.py, mapa.py, tienda.py, cuaderno.py, ayuda.py, opciones.py, desafio.py,
+  nombre_gato.py, fin_nivel.py, revisar_errores.py
+  nivel.py              un nivel: ejercicios, respuestas, vidas, pistas, monedas (la lógica)
+  nivel_pantalla.py     cómo se ve un nivel: dónde va cada cosa y cómo se dibuja
 juego/mate.py         el "profe": entiende lo tipeado, compara respuestas y detecta errores típicos
 juego/ejercicios.py   estructuras de los pasos y generadores de derivadas (mundos 1 a 3½)
 juego/gen_integrales.py  derivadas parciales e integrales de una variable (mundos 4 a 7)
 juego/gen_multiples.py   integrales dobles y triples (mundos 8 y 9)
-juego/mundos.py       la lista de mundos y niveles
-juego/escenas.py      pantallas (menú, mapa, nivel, resultados, cuaderno, ayuda)
+juego/detective.py    "encontrá el error en la resolución de otra persona"
+juego/mundos.py       la lista de mundos y niveles (los generadores van por nombre: se cargan al usarlos)
 juego/ui.py           dibujo: colores, tipografías, fórmulas, botones, cuadro de texto
 juego/lienzo.py       todo se piensa en 1280×720 pero se dibuja a la resolución real de tu pantalla
+juego/cache.py        memorias de dibujos ya hechos (con tope; se vacían juntas al cambiar la resolución)
 juego/pincel.py       piezas dibujadas con Skia (el motor gráfico de Chrome): botones, paneles, islas,
                       palmeras, globitos... con degradés, brillos y sombras suaves. Si Skia no está,
                       el juego usa dibujos más simples y anda igual.
 juego/gato.py         el gato (dibujado con formas) y sus animaciones
+juego/ropa.py         la ropa de la tienda
 juego/paisaje.py      cielo, mar, islas, palmeras y el pergamino de fondo
 juego/fx.py           confeti, chispas, monedas que vuelan, fueguito
 juego/sonido.py       los sonidos 8-bit (se sintetizan al arrancar, no hay archivos de audio)
-juego/progreso.py     guardado
+juego/progreso.py     guardado (todos los datos en una sola tabla: _CAMPOS)
+juego/rutas.py        dónde se guardan las cosas
+juego/autoprueba.py   la autoprueba de main.py --autoprueba
 derivia.spec          receta de PyInstaller (arma dist/Derivia)
 instalador.iss        receta de Inno Setup (arma el Setup)
+requisitos-armado.txt versiones exactas de las librerías con las que se arma el instalador
+pyproject.toml        reglas del análisis de código (ruff)
 .github/workflows/instalador.yml   GitHub arma el instalador y el paquete de la Store, y los publica
-.github/workflows/pruebas.yml      corre tests/test_superposicion.py en cada cambio
+.github/workflows/pruebas.yml      análisis del código y pruebas en cada cambio
 tienda/                            manifiesto, logos, capturas y textos para la Microsoft Store
 herramientas/hacer_icono.py        genera el ícono y los logos de la tienda a partir del gato
 herramientas/capturas_tienda.py    saca las capturas para la ficha de la Store
-tests/                pruebas: genera cientos de ejercicios y verifica que todo esté bien
+tests/                pruebas
 ```
 
 Pruebas:
 
 ```
+ruff check .                      # análisis del código (pip install ruff)
+python tests/test_progreso.py     # guardado: datos raros, archivo dañado, disco sin permiso...
 python tests/test_ejercicios.py   # cientos de ejercicios de cada nivel: respuestas y errores típicos bien armados
 python tests/test_detective.py    # el detective: una sola razón correcta y todas con sentido
 python tests/test_superposicion.py  # en ningún nivel se pisan los botones, el globito del gato y el ejercicio
 python tests/test_e2e.py          # el juego entero: arranque, tamaños de ventana, todos los botones,
                                   # los 49 niveles y borrar progreso (--rapido para una versión corta)
+python main.py --autoprueba       # abre el juego y recorre el menú, el mapa, la tienda y los 49 niveles
 ```
 
 ## Gráficos

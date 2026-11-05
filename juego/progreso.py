@@ -1,12 +1,13 @@
 """Guarda estrellas, niveles desbloqueados y el cuaderno de errores en un JSON."""
 
+import contextlib
 import json
 import logging
-import os
 import time
 from pathlib import Path
 
 from .mundos import MUNDOS
+from .rutas import carpeta_datos
 
 log = logging.getLogger(__name__)
 
@@ -14,13 +15,8 @@ REPASOS_PARA_SACAR = 2   # veces que hay que acertar un ejercicio del cuaderno
 
 
 def _carpeta():
-    if os.name == "nt":
-        base = Path(os.environ.get("APPDATA", Path.home()))
-    else:
-        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    carpeta = base / "Derivia"
-    carpeta.mkdir(parents=True, exist_ok=True)
-    _migrar(base / "Calculandia" / "progreso.json", carpeta / "progreso.json")
+    carpeta = carpeta_datos()
+    _migrar(carpeta.parent / "Calculandia" / "progreso.json", carpeta / "progreso.json")
     return carpeta
 
 
@@ -29,10 +25,8 @@ def _migrar(viejo, nuevo):
     nuevo, se copia (el archivo viejo no se toca)."""
     if nuevo.exists() or not viejo.exists():
         return
-    try:
+    with contextlib.suppress(OSError):     # si no se puede copiar, se empieza de cero
         nuevo.write_bytes(viejo.read_bytes())
-    except OSError:
-        pass
 
 
 def _clave_nivel(mundo_id, idx):

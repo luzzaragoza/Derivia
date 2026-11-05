@@ -2,10 +2,13 @@
 
 Uso:  from .sonido import sonidos;  sonidos.tocar("bien")"""
 
+import logging
 import random
 
 import numpy as np
 import pygame
+
+log = logging.getLogger(__name__)
 
 FS = 22050
 
@@ -222,7 +225,10 @@ class Sonidos:
         self.musica_activa = True
         self.volumen_musica = 0.5
         self._sonidos = {}
-        self._musicas = {}
+        self._musicas = {}            # nombre -> pygame.mixer.Sound, ya lista para sonar
+        self._ondas = {}              # nombre -> onda calculada de antemano (en segundo plano)
+        self._fabricas = {"isla": _musica_isla, "estudio": _musica_estudio, "pensar": _musica_pensar}
+        self._formato = (FS, 1)       # frecuencia y canales de la placa de audio
         self._actual = None
         self._canal_musica = 0
         self._agachar = 0.0
@@ -244,6 +250,7 @@ class Sonidos:
             freq, _, canales = pygame.mixer.get_init()
         except pygame.error:
             return
+        self._formato = (freq, canales)
         pygame.mixer.set_num_channels(18)
         pygame.mixer.set_reserved(2)          # los canales 0 y 1 son de la música
         efectos = _diseñar()
@@ -253,13 +260,29 @@ class Sonidos:
                 self._sonidos[nombre] = self._a_sonido(w, freq, canales)
             except Exception:
                 continue
-        for nombre, f in (("isla", _musica_isla), ("estudio", _musica_estudio), ("pensar", _musica_pensar)):
-            try:
-                self._musicas[nombre] = self._a_sonido(f(), freq, canales, 0.55)
-            except Exception:
-                continue
+        # la música se arma recién cuando suena por primera vez (o de antemano con precargar)
         self.ok = bool(self._sonidos)
         self._aplicar_volumen()
+
+    def precargar(self):
+        """Calcula de antemano las músicas que todavía no sonaron. Es solo cuenta con numpy, así que
+        se puede hacer en segundo plano; pasarlas a sonido de pygame queda para el hilo principal."""
+        for nombre, fabrica in self._fabricas.items():
+            if nombre not in self._musicas and nombre not in self._ondas:
+                self._ondas[nombre] = fabrica()
+
+    def _musica_lista(self, nombre):
+        """El sonido de una música (armándolo si es la primera vez). None si no existe o falla."""
+        if nombre not in self._musicas and nombre in self._fabricas:
+            try:
+                onda = self._ondas.pop(nombre, None)
+                if onda is None:
+                    onda = self._fabricas[nombre]()
+                self._musicas[nombre] = self._a_sonido(onda, *self._formato, 0.55)
+            except Exception:
+                log.warning("No se pudo armar la música %s", nombre, exc_info=True)
+                return None
+        return self._musicas.get(nombre)
 
     def _aplicar_volumen(self):
         for s in self._sonidos.values():
@@ -295,10 +318,11 @@ class Sonidos:
             return
         viejo = pygame.mixer.Channel(self._canal_musica)
         viejo.fadeout(1200)
-        if nombre and self.musica_activa and nombre in self._musicas:
+        sonido = self._musica_lista(nombre) if nombre and self.musica_activa else None
+        if sonido is not None:
             self._canal_musica = 1 - self._canal_musica
             nuevo = pygame.mixer.Channel(self._canal_musica)
-            nuevo.play(self._musicas[nombre], loops=-1, fade_ms=1200)
+            nuevo.play(sonido, loops=-1, fade_ms=1200)
             self._volumen_canal_musica()
 
     def agachar(self, segundos=1.5):

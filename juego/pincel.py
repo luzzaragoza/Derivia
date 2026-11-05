@@ -51,7 +51,7 @@ def _c(color, a=255):
 
 
 def _mezcla(c1, c2, k):
-    return tuple(int(a + (b - a) * k) for a, b in zip(c1[:3], c2[:3]))
+    return tuple(int(a + (b - a) * k) for a, b in zip(c1[:3], c2[:3], strict=True))
 
 
 def aclarar(c, f):
