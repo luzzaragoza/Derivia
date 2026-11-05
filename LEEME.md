@@ -147,6 +147,7 @@ Pruebas:
 ```
 python tests/test_ejercicios.py   # cientos de ejercicios de cada nivel: respuestas y errores típicos bien armados
 python tests/test_detective.py    # el detective: una sola razón correcta y todas con sentido
+python tests/test_superposicion.py  # en ningún nivel se pisan los botones, el globito del gato y el ejercicio
 python tests/test_e2e.py          # el juego entero: arranque, tamaños de ventana, todos los botones,
                                   # los 49 niveles y borrar progreso (--rapido para una versión corta)
 ```
