@@ -1,16 +1,24 @@
-# Arma el instalador de Derivia para Windows en las compus de GitHub.
+# Arma Derivia para Windows en las compus de GitHub: el instalador (Setup.exe) y el paquete
+# para la Microsoft Store (.msix).
 #
-# - A mano: pestaña Actions → "Instalador de Windows" → Run workflow.
-#   El instalador queda para bajar abajo de todo en la corrida, en "Artifacts".
-# - Para sacar una versión: subí una etiqueta que empiece con v, por ejemplo
-#       git tag v1.0.0
-#       git push origin v1.0.0
-#   y aparece en la página de Releases del repo con Derivia-Setup-1.0.0.exe adjunto.
+# - Sacar una versión: pestaña Actions → "Instalador de Windows" → Run workflow, escribí la
+#   versión (por ejemplo 1.0.0) y Run. Crea la etiqueta v1.0.0 y la Release con los dos archivos.
+#   (También sale solo si alguien sube una etiqueta v* desde la terminal.)
+# - Sin escribir versión: arma todo de prueba y lo deja abajo de todo en la corrida, en "Artifacts".
+#
+# El paquete de la Store usa los datos de Partner Center guardados en las variables del repo
+# (Settings → Secrets and variables → Actions → Variables): MSIX_IDENTIDAD, MSIX_EDITOR y
+# MSIX_NOMBRE_EDITOR. Sin esas variables arma un paquete de prueba (que no se puede subir a la Store).
 
 name: Instalador de Windows
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar, por ejemplo 1.0.0 (vacío: solo de prueba, sin publicar)"
+        required: false
+        default: ""
   push:
     tags: ["v*"]
     # en las ramas, solo cuando se toca cómo se arma el juego (para enterarse rápido si se rompe)
@@ -19,10 +27,11 @@ on:
       - derivia.spec
       - instalador.iss
       - requirements.txt
+      - tienda/**
       - .github/workflows/instalador.yml
 
 permissions:
-  contents: write   # para publicar el Release cuando se sube una etiqueta v*
+  contents: write   # para crear la etiqueta y la Release
 
 jobs:
   windows:
@@ -41,11 +50,25 @@ jobs:
 
       - name: Versión
         id: version
+        env:
+          PEDIDA: ${{ github.event.inputs.version }}
         run: |
-          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart("v") }
-          else { $v = "dev-" + "${{ github.sha }}".Substring(0, 7) }
+          $pedida = "$env:PEDIDA".Trim().TrimStart("v")
+          if ($pedida) {
+            if ($pedida -notmatch '^\d+\.\d+\.\d+$') { throw "La versión tiene que ser como 1.0.0 (tres números con puntos)" }
+            $v = $pedida; $publicar = "si"
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            $v = "${{ github.ref_name }}".TrimStart("v"); $publicar = "si"
+          } else {
+            $v = "dev-" + "${{ github.sha }}".Substring(0, 7); $publicar = "no"
+          }
+          # la Store pide 4 números y el último en 0
+          if ($v -match '^(\d+)\.(\d+)\.(\d+)$') { $msix = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0" }
+          else { $msix = "0.0.${{ github.run_number }}.0" }
           "version=$v" >> $env:GITHUB_OUTPUT
-          Write-Host "Versión: $v"
+          "msix=$msix" >> $env:GITHUB_OUTPUT
+          "publicar=$publicar" >> $env:GITHUB_OUTPUT
+          Write-Host "Versión: $v (paquete de la Store: $msix, publicar: $publicar)"
 
       - name: Instalar dependencias
         run: |
@@ -72,6 +95,7 @@ jobs:
           Write-Host "Ventana: $titulo"
           if ($titulo -ne "Derivia") { throw "El juego no abrió bien: $titulo" }
 
+      # ------------------------------------------------------------ instalador (Setup.exe)
       - name: Instalar Inno Setup si falta
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -82,15 +106,89 @@ jobs:
       - name: Armar el instalador
         run: '& $env:ISCC "/DVersion=${{ steps.version.outputs.version }}" instalador.iss'
 
+      # ------------------------------------------------------------ paquete de la Microsoft Store (.msix)
+      - name: Armar el paquete de la Store
+        env:
+          IDENTIDAD: ${{ vars.MSIX_IDENTIDAD }}
+          EDITOR: ${{ vars.MSIX_EDITOR }}
+          NOMBRE_EDITOR: ${{ vars.MSIX_NOMBRE_EDITOR }}
+        run: |
+          $real = [bool]($env:IDENTIDAD -and $env:EDITOR -and $env:NOMBRE_EDITOR)
+          if (-not $real) {
+            Write-Host "::warning::Faltan las variables MSIX_* del repo: el paquete es de PRUEBA y no se puede subir a la Store."
+            $env:IDENTIDAD = "Derivia.Prueba"; $env:EDITOR = "CN=Derivia Prueba"; $env:NOMBRE_EDITOR = "Derivia (prueba)"
+          }
+          "MSIX_REAL=$real" >> $env:GITHUB_ENV
+          "MSIX_IDENTIDAD_USADA=$env:IDENTIDAD" >> $env:GITHUB_ENV
+          "MSIX_EDITOR_USADO=$env:EDITOR" >> $env:GITHUB_ENV
+
+          $sdk = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" |
+                 Sort-Object FullName | Select-Object -Last 1
+          if (-not $sdk) { throw "No se encontró makeappx.exe (Windows SDK)" }
+          "SDK_BIN=$($sdk.DirectoryName)" >> $env:GITHUB_ENV
+
+          $carpeta = "msix"
+          if (Test-Path $carpeta) { Remove-Item $carpeta -Recurse -Force }
+          Copy-Item dist/Derivia $carpeta -Recurse
+          New-Item "$carpeta/tienda" -ItemType Directory | Out-Null
+          Copy-Item tienda/imagenes/*.png "$carpeta/tienda/"
+          $xml = Get-Content tienda/AppxManifest.xml -Raw -Encoding UTF8
+          $xml = $xml.Replace("{{IDENTIDAD}}", [Security.SecurityElement]::Escape($env:IDENTIDAD))
+          $xml = $xml.Replace("{{EDITOR}}", [Security.SecurityElement]::Escape($env:EDITOR))
+          $xml = $xml.Replace("{{NOMBRE_EDITOR}}", [Security.SecurityElement]::Escape($env:NOMBRE_EDITOR))
+          $xml = $xml.Replace("{{VERSION}}", "${{ steps.version.outputs.msix }}")
+          [IO.File]::WriteAllText("$PWD/$carpeta/AppxManifest.xml", $xml, (New-Object Text.UTF8Encoding $false))
+
+          New-Item salida -ItemType Directory -Force | Out-Null
+          $nombre = if ($real) { "Derivia-Store-${{ steps.version.outputs.version }}.msix" } else { "Derivia-Store-PRUEBA-${{ steps.version.outputs.version }}.msix" }
+          & "$($sdk.DirectoryName)\makeappx.exe" pack /d $carpeta /p "salida/$nombre" /o
+          if ($LASTEXITCODE) { throw "makeappx falló" }
+          "MSIX=salida/$nombre" >> $env:GITHUB_ENV
+
+      - name: Probar que el paquete de la Store se instala y abre
+        # La Store firma el paquete al publicarlo; acá se firma una copia con un certificado de mentira,
+        # solo para instalarla en esta compu de GitHub y ver que el juego abra.
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $env:MSIX_EDITOR_USADO -KeyUsage DigitalSignature `
+                  -CertStoreLocation Cert:\CurrentUser\My `
+                  -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          $clave = ConvertTo-SecureString -String "prueba" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath prueba.pfx -Password $clave | Out-Null
+          Export-Certificate -Cert $cert -FilePath prueba.cer | Out-Null
+          Import-Certificate -FilePath prueba.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+          Copy-Item $env:MSIX prueba.msix
+          & "$env:SDK_BIN\signtool.exe" sign /fd SHA256 /f prueba.pfx /p prueba prueba.msix
+          if ($LASTEXITCODE) { throw "signtool falló" }
+          Add-AppxPackage -Path prueba.msix
+          $pkg = Get-AppxPackage -Name $env:MSIX_IDENTIDAD_USADA
+          if (-not $pkg) { throw "El paquete no quedó instalado" }
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!Derivia"
+          Start-Sleep -Seconds 40
+          $p = Get-Process Derivia -ErrorAction SilentlyContinue | Select-Object -First 1
+          $titulo = if ($p) { $p.MainWindowTitle } else { "(no está abierto)" }
+          if ($p) { Stop-Process -Id $p.Id -Force }
+          Remove-AppxPackage -Package $pkg.PackageFullName
+          Write-Host "Ventana: $titulo"
+          if ($titulo -ne "Derivia") { throw "El juego instalado desde el paquete no abrió bien: $titulo" }
+
+      # ------------------------------------------------------------ resultados
       - uses: actions/upload-artifact@v4
         with:
-          name: Derivia-Setup-${{ steps.version.outputs.version }}
-          path: salida/*.exe
+          name: Derivia-${{ steps.version.outputs.version }}
+          path: |
+            salida/*.exe
+            salida/*.msix
           if-no-files-found: error
 
-      - name: Publicar el Release
-        if: github.ref_type == 'tag'
+      - name: Publicar la Release
+        if: steps.version.outputs.publicar == 'si'
         uses: softprops/action-gh-release@v2
         with:
-          files: salida/*.exe
+          tag_name: v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Derivia ${{ steps.version.outputs.version }}
+          # (el paquete de PRUEBA, sin los datos de Partner Center, no se publica)
+          files: |
+            salida/*.exe
+            salida/Derivia-Store-[0-9]*.msix
           generate_release_notes: true

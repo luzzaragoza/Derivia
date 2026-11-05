@@ -75,15 +75,39 @@ Instalá Python desde https://www.python.org/downloads/ (la 3.12 o una más nuev
 
 ### Sacar una versión nueva
 
-Se hace con una etiqueta que empiece con `v`:
+En GitHub: pestaña **Actions** → **Instalador de Windows** → **Run workflow**. Escribí la versión
+(por ejemplo `1.0.1`; un número más alto que la anterior) y tocá **Run workflow**.
 
-```
-git tag v1.0.0
-git push origin v1.0.0
-```
+En unos 10 minutos aparece en **Releases** con dos archivos:
 
-GitHub arma el instalador solo (tarda unos 10 minutos) y lo publica en **Releases** como
-`Derivia-Setup-1.0.0.exe`. Si cambiás el gato, `python herramientas/hacer_icono.py` regenera el ícono.
+- `Derivia-Setup-1.0.1.exe`: el instalador, para bajar e instalar (o subir a itch.io).
+- `Derivia-Store-1.0.1.msix`: el paquete para la Microsoft Store (ver abajo).
+
+(Desde la terminal también sale subiendo una etiqueta: `git tag v1.0.1` y `git push origin v1.0.1`.)
+
+Si cambiás el gato, `python herramientas/hacer_icono.py` regenera el ícono y los logos de la tienda.
+
+## Microsoft Store
+
+Desde la Store se instala sin el cartel de "Windows protegió su PC" y se actualiza solo.
+
+- Los textos de la ficha (descripción, palabras clave, etc.) están en `tienda/ficha.md` y las capturas
+  en `tienda/capturas/` (se regeneran con `python herramientas/capturas_tienda.py`).
+- El paquete `.msix` lo arma el workflow. Para que sirva para la Store, el repo tiene que tener tres
+  **variables** (Settings → Secrets and variables → Actions → pestaña Variables) con los datos que da
+  Partner Center en *Identidad del producto*:
+
+  | Variable | En Partner Center |
+  |---|---|
+  | `MSIX_IDENTIDAD` | Package/Identity/Name |
+  | `MSIX_EDITOR` | Package/Identity/Publisher (empieza con `CN=`) |
+  | `MSIX_NOMBRE_EDITOR` | Package/Properties/PublisherDisplayName |
+
+  Sin esas variables el paquete sale como `Derivia-Store-PRUEBA-…` y la Store lo rechaza.
+- Para actualizar: sacá una versión nueva (arriba) y en Partner Center hacé un *envío nuevo* (Update)
+  subiendo el `.msix` nuevo.
+- En la versión de la Store el progreso queda en la carpeta privada de la app (Windows la maneja):
+  si desinstalás la app de la Store, se borra el progreso.
 
 ## Cómo escribir las respuestas
 
@@ -137,8 +161,11 @@ juego/sonido.py       los sonidos 8-bit (se sintetizan al arrancar, no hay archi
 juego/progreso.py     guardado
 derivia.spec          receta de PyInstaller (arma dist/Derivia)
 instalador.iss        receta de Inno Setup (arma el Setup)
-.github/workflows/instalador.yml   GitHub arma el instalador y lo publica al subir una etiqueta v*
-herramientas/hacer_icono.py        genera juego/assets/derivia.ico a partir del gato
+.github/workflows/instalador.yml   GitHub arma el instalador y el paquete de la Store, y los publica
+.github/workflows/pruebas.yml      corre tests/test_superposicion.py en cada cambio
+tienda/                            manifiesto, logos, capturas y textos para la Microsoft Store
+herramientas/hacer_icono.py        genera el ícono y los logos de la tienda a partir del gato
+herramientas/capturas_tienda.py    saca las capturas para la ficha de la Store
 tests/                pruebas: genera cientos de ejercicios y verifica que todo esté bien
 ```
 

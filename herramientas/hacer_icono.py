@@ -2,9 +2,10 @@
 
     python herramientas/hacer_icono.py
 
-Deja dos archivos:
+Deja:
   juego/assets/icono.png   el de la ventana del juego
   juego/assets/derivia.ico el del .exe y el instalador (16 a 256 px)
+  tienda/imagenes/*.png    los logos del paquete de la Microsoft Store
 
 Necesita pygame-ce y Pillow (pip install pillow). Con skia-python el gato sale más prolijo."""
 
@@ -44,7 +45,18 @@ def main():
     pygame.image.save(icono, png)
     Image.open(png).save(os.path.join(carpeta, "derivia.ico"),
                          sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    print("Listo:", png, "y derivia.ico")
+    # logos del paquete de la Microsoft Store (tamaños que pide el manifiesto)
+    tienda = os.path.join(RAIZ, "tienda", "imagenes")
+    os.makedirs(tienda, exist_ok=True)
+    gato_png = Image.open(png)
+    for nombre, (w, h), relleno in (("StoreLogo", (50, 50), 1.0), ("Square44x44Logo", (44, 44), 1.0),
+                                    ("Square150x150Logo", (150, 150), 0.8), ("Wide310x150Logo", (310, 150), 0.8)):
+        lado = round(min(w, h) * relleno)
+        lienzo = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        chico = gato_png.resize((lado, lado), Image.LANCZOS)
+        lienzo.paste(chico, ((w - lado) // 2, (h - lado) // 2), chico)
+        lienzo.save(os.path.join(tienda, nombre + ".png"))
+    print("Listo:", png, ", derivia.ico y los logos de la tienda")
 
 
 if __name__ == "__main__":
