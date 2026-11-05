@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Manifiesto del paquete de Derivia para la Microsoft Store (MSIX).
+  Lo completa el workflow "Instalador de Windows": los {{...}} salen de las variables del repo
+  (Settings → Secrets and variables → Actions → Variables) que da Partner Center:
+    MSIX_IDENTIDAD       Package/Identity/Name           (ej. 12345LuzZaragoza.Derivia)
+    MSIX_EDITOR          Package/Identity/Publisher      (ej. CN=1A2B3C4D-....)
+    MSIX_NOMBRE_EDITOR   Package/Properties/PublisherDisplayName
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity Name="{{IDENTIDAD}}" Publisher="{{EDITOR}}" Version="{{VERSION}}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Derivia</DisplayName>
+    <PublisherDisplayName>{{NOMBRE_EDITOR}}</PublisherDisplayName>
+    <Logo>tienda\StoreLogo.png</Logo>
+    <Description>Un juego para aprender a derivar e integrar, de a un paso por vez.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="es-AR" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Derivia" Executable="Derivia.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Derivia"
+        Description="Un juego para aprender a derivar e integrar, de a un paso por vez."
+        BackgroundColor="transparent"
+        Square150x150Logo="tienda\Square150x150Logo.png"
+        Square44x44Logo="tienda\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="tienda\Wide310x150Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
