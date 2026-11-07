@@ -1,0 +1,4 @@
+# Los .bat de Windows necesitan fin de línea CRLF (con LF, a veces cmd se confunde con las etiquetas)
+*.bat text eol=crlf
+*.py text eol=lf
+*.iss text eol=crlf

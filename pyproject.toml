@@ -1,0 +1,38 @@
+[project]
+name = "derivia"
+version = "1.0.0"
+description = "Un juego para aprender a derivar e integrar, de a un paso por vez."
+requires-python = ">=3.12"
+
+# Análisis del código:  ruff check .
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "F",     # errores (nombres sin definir, imports sin usar...)
+    "E",     # estilo PEP 8
+    "W",
+    "B",     # trampas comunes (bugbear)
+    "I",     # imports ordenados
+    "C4",    # comprensiones
+    "SIM",   # simplificaciones
+    "PERF",  # rendimiento
+    "PIE",
+    "RET",
+    "UP",    # sintaxis moderna de Python
+]
+ignore = [
+    "E501",    # renglones largos: hay fórmulas LaTeX y textos que se leen mejor enteros
+    "E741",    # nombres como l o I en fórmulas
+    "RET504",  # a veces una variable con nombre explica mejor qué se devuelve
+    "SIM108",  # if/else en varias líneas cuando es más claro que el ternario
+    "PERF203", # try/except en bucles: se usa a propósito al evaluar expresiones
+    "PERF401", # append en un for: muchas veces se lee mejor que extend con una comprensión
+    "C408",    # dict(clave=valor): en este código se lee mejor que {"clave": valor}
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]          # las pruebas ajustan sys.path antes de importar el juego
+"herramientas/*" = ["E402"]

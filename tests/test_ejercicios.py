@@ -19,8 +19,8 @@ import sympy as sp  # noqa: E402
 from matplotlib.mathtext import MathTextParser  # noqa: E402
 
 from juego import mundos as mu  # noqa: E402
-from juego.ui import espaciar_integrales  # noqa: E402
 from juego.mate import ERRORES, C, equivalentes, parsear, x, y  # noqa: E402
+from juego.ui import espaciar_integrales  # noqa: E402
 
 _parser = MathTextParser("path")
 _vistos = set()
@@ -81,9 +81,9 @@ def test_todos_los_niveles(n=60, solo=None):
                 for gen in nivel.generadores:
                     semilla = rng.randrange(10**9)
                     try:
-                        _chequear_ejercicio(mu.generar(m.id, i, gen.__name__, semilla))
+                        _chequear_ejercicio(mu.generar(m.id, i, gen, semilla))
                     except Exception:
-                        print("FALLA en", m.id, i, gen.__name__, semilla)
+                        print("FALLA en", m.id, i, gen, semilla)
                         raise
             assert len(mu.generar_nivel(m.id, i, rng)) == nivel.cantidad, (m.id, i)
 
