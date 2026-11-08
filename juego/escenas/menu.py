@@ -46,6 +46,17 @@ class Menu(Escena):
             Boton((x + 207, y + 302, 193, 56), "Salir", app.salir, ARENA, tam=22),
         ]
 
+    def _preparar_mapa(self):
+        """Cuando terminó la precarga (para no juntar las dos cosas), deja lista la isla del mapa,
+        de a un pedacito por cuadro."""
+        from ..app import precarga_lista
+        if self.t < 1.0 or not precarga_lista():
+            return
+        if not hasattr(self, "_pasos_mapa"):
+            self._pasos_mapa = escenas.Mapa.pasos_para_abrir(self.app)
+        if self._pasos_mapa:
+            self._pasos_mapa.pop(0)()
+
     def jugar(self):
         self.app.cambiar(escenas.Mapa(self.app), "ola")
 
@@ -68,6 +79,7 @@ class Menu(Escena):
 
     def actualizar(self, dt):
         self.t += dt
+        self._preparar_mapa()
         self.cielo.actualizar(dt)
         self.mar.actualizar(dt)
         self.gato.actualizar(dt)

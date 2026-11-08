@@ -7,6 +7,7 @@ import pygame
 
 from .. import escenas, paisaje, pincel, ui
 from .. import lienzo as dibujo
+from ..cache import CacheDibujos
 from ..fx import Efectos, suave
 from ..gato import Gato
 from ..lienzo import Lienzo
@@ -50,6 +51,13 @@ def _catmull(pts, pasos=24):
     return salida
 
 
+# Lo que cuesta armar de cada isla (el dibujo con el camino y los niveles, el cielo y el mar) se guarda
+# para toda la sesión: volver al mapa o a una isla ya vista no lo arma de nuevo.
+_CAPAS = CacheDibujos(limite=30)      # firma de la isla (con tu progreso en ella) -> dibujo
+_FONDOS = CacheDibujos(limite=30)     # (isla, escala) -> (cielo, mar)
+_FOTOS = CacheDibujos(limite=12)      # (isla, escala) -> foto del fondo, para fundirla al llegar a esa isla
+
+
 class Mapa(Escena):
     def __init__(self, app, mundo_id=None):
         super().__init__(app)
@@ -58,14 +66,15 @@ class Mapa(Escena):
             abiertos = [m.id for m in MUNDOS if prog.mundo_desbloqueado(m.id)]
             mundo_id = abiertos[-1] if abiertos else MUNDOS[0].id
         self.sel = [m.id for m in MUNDOS].index(mundo_id)
-        self.fondos = {}
+        self._fotos = None             # fondos congelados mientras se desliza de una isla a otra
+        self._fotos_de = self.sel      # de qué isla es la foto "vieja"
+        self._pendientes = []          # islas a preparar de a poco mientras el mapa está quieto
         self.humo, self.gotas, self.luciernagas = [], [], []
         self.t_rayo, self.rayo = 4.0, None
         self.gato = Gato(92)
         self.t = 0.0
         self.desliz = None
         self.hover = None
-        self.capas = {}
         self.fx = Efectos()
         self.arranque = None
         self.armar()
@@ -95,13 +104,20 @@ class Mapa(Escena):
                 return i
         return abiertos[-1] if abiertos else None
 
+    def _firma(self, idx):
+        """Lo que cambia el dibujo de una isla: tu progreso en ella (y la resolución)."""
+        m, p = MUNDOS[idx], self.app.progreso
+        estado = tuple((p.desbloqueado(m.id, i), p.aprobado(m.id, i), p.estrellas(m.id, i))
+                       for i in range(len(m.niveles)))
+        return idx, estado, dibujo.escala()
+
     def _capa(self, idx):
-        """Isla + camino + nodos (lo que no se mueve), cacheado por mundo."""
-        if idx in self.capas:
-            return self.capas[idx]
-        with pincel.siempre():
-            self.capas[idx] = self._armar_capa(idx)
-        return self.capas[idx]
+        """Isla + camino + nodos (lo que no se mueve)."""
+        clave = self._firma(idx)
+        if clave not in _CAPAS:
+            with pincel.siempre():
+                _CAPAS[clave] = self._armar_capa(idx)
+        return _CAPAS[clave]
 
     def _armar_capa(self, idx):
         m = MUNDOS[idx]
@@ -218,8 +234,8 @@ class Mapa(Escena):
         p = self.app.progreso
         p.todo_desbloqueado = not p.todo_desbloqueado
         p.guardar()
-        self.capas = {}
         self.armar()
+        self._pendientes = []         # cambiaron las islas abiertas: preparar de nuevo
 
     def mover(self, d):
         self.ir(self.sel + d)
@@ -231,6 +247,8 @@ class Mapa(Escena):
             return
         direccion = 1 if destino > self.sel else -1
         self.desliz = [0.0, direccion, self.sel]
+        self._fotos = None
+        self._fotos_de = self.sel
         self.sel = destino
         self.humo, self.gotas, self.luciernagas, self.rayo = [], [], [], None
         self.hover = None
@@ -284,9 +302,9 @@ class Mapa(Escena):
 
     def actualizar(self, dt):
         self.t += dt
-        for cielo, mar in self.fondos.values():
-            cielo.actualizar(dt)
-            mar.actualizar(dt)
+        cielo, mar = self._fondo(self.sel)
+        cielo.actualizar(dt)
+        mar.actualizar(dt)
         self._efectos_tema(dt)
         self.gato.actualizar(dt)
         self.fx.actualizar(dt)
@@ -309,6 +327,12 @@ class Mapa(Escena):
             self.desliz[0] += dt / 0.5
             if self.desliz[0] >= 1:
                 self.desliz = None
+                # la foto de la isla que se dejó sirve para volver (su cielo se queda quieto mientras no se ve)
+                if self._fotos:
+                    _FOTOS[(self._fotos_de, dibujo.escala())] = self._fotos[0]
+                self._fotos = None
+        elif not self.arranque and self.t > 0.3:
+            self._preparar_de_a_poco()
 
     def _tooltip(self, sup, i):
         m = self.mundo
@@ -348,11 +372,43 @@ class Mapa(Escena):
 
     # ------------------------------------------------ fondo de cada isla
     def _fondo(self, idx):
-        if idx not in self.fondos:
+        clave = (idx, dibujo.escala())
+        if clave not in _FONDOS:
             t = paisaje.tema(MUNDOS[idx].id)
-            self.fondos[idx] = (paisaje.Cielo(semilla=4, nubes=5, tema=t),
-                                paisaje.Mar(215, [ui.aclarar(t["mar"][0], 0.1)] + t["mar"]))
-        return self.fondos[idx]
+            _FONDOS[clave] = (paisaje.Cielo(semilla=4, nubes=5, tema=t),
+                              paisaje.Mar(215, [ui.aclarar(t["mar"][0], 0.1)] + t["mar"]))
+        return _FONDOS[clave]
+
+    # ---------------------------------------------- preparar islas de antemano
+    def _preparar_de_a_poco(self):
+        """Mientras el mapa está quieto, deja listas las otras islas abiertas (empezando por las de al
+        lado), de a un pedacito por cuadro (~10 ms): así el deslizamiento no se traba armándolas."""
+        if not self._pendientes:
+            p = self.app.progreso
+            orden = sorted(range(len(MUNDOS)), key=lambda i: (abs(i - self.sel), i))
+            for i in orden:
+                if i != self.sel and p.mundo_desbloqueado(MUNDOS[i].id):
+                    self._pendientes += [(self._fondo, i), (self._estrenar_fondo, i), (self._capa, i)]
+            self._pendientes.append(None)       # marca de "ya está todo"
+        paso = self._pendientes[0]
+        if paso is not None:
+            self._pendientes.pop(0)
+            paso[0](paso[1])
+
+    @staticmethod
+    def pasos_para_abrir(app):
+        """Lo que hay que armar para mostrar la isla con la que abre el mapa, en pasos de ~10 ms.
+        El menú los va haciendo de a uno mientras se lo mira: así la ola que lleva al mapa no se traba."""
+        mapa = Mapa(app)
+        return [lambda: mapa._fondo(mapa.sel), lambda: mapa._estrenar_fondo(mapa.sel), lambda: mapa._capa(mapa.sel)]
+
+    def _estrenar_fondo(self, idx):
+        """Dibuja el fondo una vez (así se arman las piezas que se guardan: olas, nubes, sol) y se queda
+        con la foto: al deslizarse hacia esta isla, su fondo aparece fundiéndose sin dibujarlo en el momento.
+        (El cielo de una isla que no se ve no se mueve, así que la foto sigue igual cuando se llega.)"""
+        foto = Lienzo(ANCHO, ALTO, alfa=False)
+        self._dibujar_fondo(foto, idx)
+        _FOTOS[(idx, dibujo.escala())] = foto
 
     def _dibujar_fondo(self, sup, idx):
         cielo, mar = self._fondo(idx)
@@ -431,9 +487,18 @@ class Mapa(Escena):
 
     def dibujar(self, sup):
         if self.desliz:
-            self._dibujar_fondo(sup, self.desliz[2])
-            nuevo = Lienzo(ANCHO, ALTO, alfa=False)
-            self._dibujar_fondo(nuevo, self.sel)
+            # medio segundo de deslizamiento: los dos fondos se fotografían una vez y se funden,
+            # en vez de redibujar dos cielos y dos mares en cada cuadro
+            if self._fotos is None:
+                viejo = Lienzo(ANCHO, ALTO, alfa=False)      # el de recién, tal cual se estaba viendo
+                self._dibujar_fondo(viejo, self.desliz[2])
+                nuevo = _FOTOS.pop((self.sel, dibujo.escala()), None)
+                if nuevo is None:                            # no llegó a prepararse
+                    nuevo = Lienzo(ANCHO, ALTO, alfa=False)
+                    self._dibujar_fondo(nuevo, self.sel)
+                self._fotos = (viejo, nuevo)
+            viejo, nuevo = self._fotos
+            sup.blit(viejo, (0, 0))
             nuevo.set_alpha(int(255 * suave(self.desliz[0])))
             sup.blit(nuevo, (0, 0))
         else:

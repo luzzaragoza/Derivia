@@ -37,6 +37,10 @@ jobs:
           pip install -r requisitos-armado.txt
       - name: Guardado del progreso
         run: python tests/test_progreso.py
+      - name: Consignas (el + C solo al tipear)
+        run: python tests/test_consignas.py
+      - name: Mapa (islas preparadas, deslizamiento sin trabas)
+        run: python tests/test_mapa.py
       - name: Detective de errores
         run: python tests/test_detective.py
       - name: Que nada se pise en la pantalla
