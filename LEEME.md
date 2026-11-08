@@ -188,6 +188,8 @@ Pruebas:
 ```
 ruff check .                      # análisis del código (pip install ruff)
 python tests/test_progreso.py     # guardado: datos raros, archivo dañado, disco sin permiso...
+python tests/test_consignas.py    # las consignas según el tipo de pregunta (el + C solo al tipear)
+python tests/test_mapa.py         # el mapa prepara las islas de antemano y deslizarse no arma nada nuevo
 python tests/test_ejercicios.py   # cientos de ejercicios de cada nivel: respuestas y errores típicos bien armados
 python tests/test_detective.py    # el detective: una sola razón correcta y todas con sentido
 python tests/test_superposicion.py  # en ningún nivel se pisan los botones, el globito del gato y el ejercicio

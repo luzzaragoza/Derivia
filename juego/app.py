@@ -31,6 +31,14 @@ def tamaño_inicial():
     return (int(ANCHO * e), int(ALTO * e))
 
 
+_PRECARGA_LISTA = threading.Event()
+
+
+def precarga_lista():
+    """True cuando terminó la precarga en segundo plano (para no sumarle más trabajo mientras corre)."""
+    return _PRECARGA_LISTA.is_set()
+
+
 def precargar_en_segundo_plano():
     """SymPy y matplotlib tardan en cargar y recién hacen falta en los niveles. Se cargan en un hilo
     aparte mientras ves el menú: el juego arranca enseguida y el primer nivel no espera."""
@@ -44,6 +52,8 @@ def precargar_en_segundo_plano():
             sonidos.precargar()
         except Exception:               # si algo falla acá, se carga (y se ve el error) al usarlo
             pass
+        finally:
+            _PRECARGA_LISTA.set()
 
     threading.Thread(target=precargar, name="precarga", daemon=True).start()
 

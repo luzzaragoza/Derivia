@@ -239,8 +239,7 @@ def _ejercicio_suma_int(ctx, terminos, consigna="Calculá la integral:"):
     pistas.append("Acordate: " + ",  ".join(sorted({t.pista for t in terminos})) + ".")
     pistas.append("Para chequear: derivá tu respuesta. Tiene que darte lo de adentro de la integral.")
     expl = "Término a término: " + ",  ".join(f"$\\int {tex_par(t.expr)}\\,dx = {tex(t.F)}$" for t in terminos) + "."
-    paso = paso_primitiva(ctx, "¿Cuánto da? (podés agregar $+\\,C$ o no)", "\\int f\\,dx =", F, f, errores,
-                          pistas, expl)
+    paso = paso_primitiva(ctx, "¿Cuánto da?", "\\int f\\,dx =", F, f, errores, pistas, expl, aviso_c=True)
     return Ejercicio(consigna, tex_int(f), [paso])
 
 

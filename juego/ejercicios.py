@@ -134,9 +134,13 @@ def _misma_primitiva(var):
     return iguales
 
 
+AVISO_C = " (podés agregar $+\\,C$ o no)"
+
+
 def paso_primitiva(ctx, pregunta, prefijo, primitiva, integrando, errores, pistas, explicacion,
-                   var=x, variables=(x,), mostrar=None, forzar_tipeo=False):
-    """Integral indefinida: se acepta cualquier F con F' = integrando (con o sin + C)."""
+                   var=x, variables=(x,), mostrar=None, forzar_tipeo=False, aviso_c=False):
+    """Integral indefinida: se acepta cualquier F con F' = integrando (con o sin + C).
+    aviso_c: si hay que tipear, la pregunta aclara que el + C es opcional (en las opciones ya viene escrito)."""
     iguales = _misma_primitiva(var)
     errores = [(sp.sympify(e), c) for e, c in errores if not iguales(e, primitiva)]
     resumen = f"${prefijo} {mostrar or tex(primitiva)} + C$"
@@ -150,6 +154,8 @@ def paso_primitiva(ctx, pregunta, prefijo, primitiva, integrando, errores, pista
         return Paso(pregunta=pregunta, tipo="opcion", opciones=ops, esperado=primitiva, prefijo=prefijo,
                     pistas=pistas, explicacion=explicacion, resumen=resumen, chequeo="primitiva",
                     var=var, variables=variables, integrando=integrando, mostrar=mostrar or "")
+    if aviso_c:
+        pregunta += AVISO_C
     return Paso(pregunta=pregunta, tipo="expresion", esperado=primitiva, errores=errores, prefijo=prefijo,
                 pistas=pistas, explicacion=explicacion, resumen=resumen, mostrar=mostrar or "",
                 chequeo="primitiva", var=var, variables=variables, integrando=integrando)
