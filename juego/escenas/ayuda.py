@@ -23,7 +23,7 @@ class Ayuda(Escena):
         ("e a la algo", "e^(2x)", ["e^(2x)"]),
         ("Logaritmo natural", "ln(x)", ["ln(x)"]),
         ("Raíz cuadrada", "raiz(x)", ["raiz(x)"]),
-        ("Raíz cúbica (o la que sea)", "raiz[3](x)", ["raiz[3](x)", "raiz3(x)"]),
+        ("Raíz cúbica, cuarta…", "raiz[3](x)", ["raiz[3](x)", "raiz3(x)"]),
         ("Fracción", "(x+1)/(x^2+1)", ["(x+1)/(x^2+1)"]),
         ("Seno al cuadrado", "sen(x)^2", ["sen(x)^2"]),
         ("Decimales", "0,5x", ["0,5x"]),
@@ -67,6 +67,7 @@ class Ayuda(Escena):
         consejos = ("**Consejos del gato**\n"
                     "• Usá paréntesis: **e^2x** se lee como $e^2\\cdot x$. Para $e^{2x}$ escribí **e^(2x)**.\n"
                     "• Debajo del cuadro vas a ver «Leo: …» con cómo entendí lo que escribiste.\n"
+                    "• En una fracción del teclado, con **▶** pasás del numerador al denominador.\n"
                     "• No hace falta simplificar: si es la misma función escrita distinto, está bien.\n"
                     "• Si tu teclado escribe â cuando apretás ^, no pasa nada: lo entiendo igual.\n"
                     "• En las integrales podés poner **+ C** o no.\n"

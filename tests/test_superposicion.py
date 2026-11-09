@@ -2,12 +2,12 @@
 
 Arma TODOS los pasos de ejercicios de todos los niveles en las situaciones que agrandan el globito
 del gato (te equivocaste, pediste pistas, se reveló la respuesta, acertaste con explicación),
-con el teclado numérico abierto y cerrado, y se fija que:
+y se fija que:
 
 - el globito no tape el ejercicio (consigna, fórmula, pasos, pregunta, campo de texto),
 - ningún botón tape el ejercicio (ni el gráfico de la región),
 - ningún botón quede encima del globito ni el globito encima de un botón (salvo los suyos, como "Continuar"),
-- los botones no se pisen entre ellos,
+- los botones no se pisen entre ellos ni queden donde está sentado el gato,
 - todo entre en la pantalla (1280×720).
 
 Correr con:  python tests/test_superposicion.py        (5 ejercicios por nivel)
@@ -32,6 +32,7 @@ pygame.display.set_mode((1280, 720))
 
 from juego import escenas as E  # noqa: E402
 from juego.app import App  # noqa: E402
+from juego.escenas.nivel_pantalla import ZONA_GATO  # noqa: E402
 from juego.lienzo import ALTO, ANCHO  # noqa: E402
 from juego.mundos import MUNDOS  # noqa: E402
 
@@ -93,6 +94,8 @@ def _problemas(j):
     if j.paso.tipo == "expresion":
         contenido.append(j.campo.rect)
     for b in j.botones:
+        if b.rect.colliderect(ZONA_GATO):
+            mal.append(f"el botón «{_nombre(j, b)}» tapa (o queda tapado por) el gato {b.rect}")
         if not pantalla.contains(b.rect):
             mal.append(f"el botón «{_nombre(j, b)}» se sale de la pantalla {b.rect}")
     for k, a in enumerate(botones):
@@ -136,14 +139,12 @@ def main():
                         j.paso_i = paso_i
                         j.empezar_paso()
                         j.charla = None
-                        for teclado in (False, True):
-                            app.progreso.teclado_numerico = teclado
-                            j.armar()
-                            for situacion in _situaciones(j):
-                                total += 1
-                                for p in _problemas(j):
-                                    clave = (m.nombre, nivel.nombre, situacion, p.split(" <")[0])
-                                    fallas.setdefault(clave, (p, j.ej.formula, j.paso.pregunta))
+                        j.armar()
+                        for situacion in _situaciones(j):
+                            total += 1
+                            for p in _problemas(j):
+                                clave = (m.nombre, nivel.nombre, situacion, p.split(" <")[0])
+                                fallas.setdefault(clave, (p, j.ej.formula, j.paso.pregunta))
     if fallas:
         print(f"{len(fallas)} problemas (en {total} pantallas):")
         for (mundo, nivel, sit, _), (p, formula, pregunta) in sorted(fallas.items()):

@@ -10,10 +10,8 @@ from ..mundos import mundo_por_id
 from ..ui import (
     ALTO,
     ANCHO,
-    BORDE,
     CORAL,
     DURAZNO,
-    SOL,
     SUAVE,
     TARJETA,
     Boton,
@@ -32,7 +30,7 @@ class Cuaderno(Escena):
         self.gato.animo = self.gato.animo_base
         self.botones = [Boton((24, 22, 128, 50), "Menú", self.atras, DURAZNO, tam=22)]
         if self.items:
-            self.botones.append(Boton((ANCHO - 330, 640, 300, 60), f"Practicar ({min(len(self.items), self.MAX)})",
+            self.botones.append(Boton((ANCHO - 330, 640, 300, 60), f"Corregir ({min(len(self.items), self.MAX)})",
                                       self.practicar, CORAL, CREMA, tam=24, tecla=[pygame.K_RETURN, pygame.K_KP_ENTER]))
 
     def atras(self):
@@ -49,8 +47,8 @@ class Cuaderno(Escena):
     def dibujar(self, sup):
         sup.blit(paisaje.pergamino(), (0, 0))
         letrero(sup, (ANCHO // 2 - 230, 16, 460, 62), "Cuaderno de errores", 30)
-        sup.blit(ui.rico("Los ejercicios en los que te equivocaste. Cada uno sale cuando lo resolvés **2 veces sin errores** "
-                         "(acá o cuando te aparece de repaso en un nivel).", 18, SUAVE, ancho=1180, color_negrita=ui.CORAL_OSC),
+        sup.blit(ui.rico("Tus errores, para corregirlos. Cuando lo resolvés **bien** (acá o de repaso en un nivel), "
+                         "sale del cuaderno.", 18, SUAVE, ancho=1180, color_negrita=ui.CORAL_OSC),
                  (40, 90))
         if not self.items:
             s = ui.rico("¡Está vacío! Cuando te equivoques en un ejercicio, va a aparecer acá para que lo repases.",
@@ -70,9 +68,6 @@ class Cuaderno(Escena):
             sup.blit(ui.texto(lugar, 16, SUAVE, negrita=True), (r.left + 18, r.centery - 10))
             f = ui.escalar_a(ui.formula(item["formula"], 24).sup, 620)
             sup.blit(f, f.get_rect(midleft=(r.left + 380, r.centery)))
-            for k in range(2):
-                ui.estrella(sup, (r.right - 60 + k * 28, r.centery), 11,
-                            SOL if k < item["repasos"] else (232, 222, 200), BORDE, brillo=False)
             y += 60
         if len(self.items) > self.MAX:
             sup.blit(ui.texto(f"…y {len(self.items) - self.MAX} más", 18, SUAVE, negrita=True), (40, 660))

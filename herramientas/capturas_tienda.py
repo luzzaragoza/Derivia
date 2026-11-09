@@ -85,7 +85,7 @@ def main():
     foto(app, nivel(app, 2, 0, paso=2, semilla=4), "3-cadena-paso-a-paso.png", con_error)
     j = nivel(app, 7, 1, paso=3, semilla=1)
     # escribe la respuesta correcta, como la tipearía alguien
-    respuesta = str(j.paso.esperado).replace("**", "^").replace("exp(x)", "e^x").replace("*", "")
+    respuesta = str(j.paso.esperado).replace("**", "^").replace("exp(", "e^(").replace("sin(", "sen(").replace("*", "")
     foto(app, j, "4-integral-por-partes.png", lambda j: j.campo.poner(respuesta))
     foto(app, nivel(app, 8, 2, semilla=3), "5-integral-doble.png")
     foto(app, E.Tienda(app), "6-tienda-del-michi.png")

@@ -24,14 +24,16 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 - **Te dice qué error cometiste**: por ejemplo "te faltó multiplicar por la derivada de adentro" o "(u·v)′ no es u′·v′".
 - **3 vidas por nivel**, puntos, racha y de 1 a 3 estrellas.
 - **Pistas** que cuestan 5 puntos (en los jefes no hay).
-- **Cuaderno de errores**: todo ejercicio en el que te equivocás se guarda. Te vuelve a aparecer como repaso y sale cuando lo resolvés bien 2 veces.
+- **Cuaderno de errores**: todo ejercicio en el que te equivocás se guarda para corregirlo. Te vuelve a aparecer como repaso y sale apenas lo resolvés bien.
 - **Ejercicios infinitos**: se generan con números al azar cada vez.
 - **Integrales**: se corrigen derivando tu respuesta, así que vale cualquier primitiva (con o sin `+ C`).
 - **Integrales dobles**: te muestra el dibujo de la región.
 - **Cada mundo es una isla distinta**: de la Isla Serena a la Isla Calavera, cada vez un poco más misteriosas.
 - **Tu michi tiene nombre**: se lo ponés la primera vez (y lo cambiás tocando su cartelito en el menú).
-- **Teclado de fórmulas** como el de la calculadora (x², xⁿ, √, ⁿ√, +, −, AC) y un teclado numérico que se
-  despliega con **123** (para usarlo con pantalla táctil). Los paréntesis se colorean por pareja. El punto
+- **Teclado de fórmulas** como el de la calculadora Casio fx-991LA CW: teclas oscuras de funciones con
+  casilleros (□/□, √□, ⁿ√□, x², x^□, e^□, ln, sen, cos, tg) y teclas claras de números y operaciones, con
+  ◀ ▶, DEL y AC (anda con pantalla táctil). En una fracción, ▶ pasa del numerador al denominador. La ayuda
+  para escribir fórmulas está abajo a la derecha del menú. Los paréntesis se colorean por pareja. El punto
   también multiplica (`2.x`); los decimales van con coma (`0,5`).
 - **Detective de errores**: a veces te muestran la resolución de otra persona y tenés que encontrar el error.
 - **PENSÁ / CALCULÁ**: cada consigna dice si es de razonar o de hacer la cuenta (y cambia la música).

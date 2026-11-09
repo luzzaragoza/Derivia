@@ -4,6 +4,7 @@ La franja de abajo es del gato (su globito o, si no habla, Pista y Saltear). El 
 de esa franja y, si no entra, se compacta de a poco. Nada se pisa: lo controla tests/test_superposicion.py."""
 
 import math
+from dataclasses import dataclass
 
 import pygame
 
@@ -12,8 +13,6 @@ from .. import paisaje, pincel, ui
 from ..cache import CacheDibujos
 from ..fx import rebote, suave
 from ..lienzo import Lienzo
-from ..mate import y as VAR_Y
-from ..mate import z as VAR_Z
 from ..ui import (
     ALTO,
     ANCHO,
@@ -91,18 +90,77 @@ def flecha_reiniciar(sup, centro, tam, color):
 # (etiqueta en LaTeX, lo que se inserta, cuántos lugares vuelve el cursor) — como en la calculadora.
 # Van por grupos (cada uno con su color), en el orden en que se piensa una fórmula:
 # operaciones, potencias y raíces, funciones. Los extras (y, z, +C, π, e) van al final.
-GRUPOS_TECLADO = [
-    ("operaciones", [("+", "+", 0), ("-", "-", 0), (r"\cdot", "*", 0), ("/", "/", 0), (r"(\;\;)", "()", 1)]),
-    ("potencias", [("x^{2}", "^2", 0), ("x^{n}", "^()", 1), (r"\sqrt{x}", "raiz()", 1), (r"\sqrt[n]{x}", "raiz[]()", 3)]),
-    ("funciones", [(r"\mathrm{sen}", "sen()", 1), (r"\cos", "cos()", 1), ("e^{n}", "e^()", 1), (r"\ln", "ln()", 1)]),
+@dataclass(frozen=True)
+class Tecla:
+    """Una tecla del teclado de fórmulas (como las de la calculadora Casio fx-991LA CW).
+    etiqueta: lo que se ve (LaTeX sin $, o texto). texto: lo que escribe; retroceso: cuántos lugares
+    vuelve el cursor después (para quedar adentro del paréntesis o del casillero). accion: en vez de
+    escribir, mueve el cursor o borra ("izquierda", "derecha", "borrar", "limpiar")."""
+    etiqueta: str
+    texto: str = ""
+    retroceso: int = 0
+    estilo: str = "funcion"       # funcion | variable | numero | operacion | borrar
+    accion: str = ""
+    formula: bool = True          # la etiqueta se dibuja como fórmula
+    icono: str = ""               # o se dibuja a mano (fracción, raíz enésima): ver _ICONOS
+
+
+def _icono_fraccion(color):
+    """□ arriba, rayita, □ abajo (como la tecla de fracción de la calculadora)."""
+    s = Lienzo(24, 30)
+    dibujo.rect(s, color, (6, 1, 12, 10), 2, border_radius=2)
+    dibujo.line(s, color, (2, 15), (22, 15), 2)
+    dibujo.rect(s, color, (6, 19, 12, 10), 2, border_radius=2)
+    return s
+
+
+def _icono_raiz_n(color):
+    """Raíz con un □ chiquito de índice y un □ adentro."""
+    raiz = ui.formula(r"\sqrt{□}", 24, color).sup
+    s = Lienzo(raiz.get_width() + 9, 30)
+    dibujo.rect(s, color, (1, 3, 9, 8), 2, border_radius=2)
+    s.blit(raiz, (8, 30 - raiz.get_height()))
+    return s
+
+
+_ICONOS = {"fraccion": _icono_fraccion, "raiz_n": _icono_raiz_n}
+
+
+# fila de arriba: las teclas oscuras de funciones, con casilleros □ como en la calculadora
+TECLAS_FUNCIONES = [
+    Tecla("□/□", "()/()", 4, icono="fraccion"),
+    Tecla(r"\sqrt{□}", "raiz()", 1),
+    Tecla("ⁿ√□", "raiz[]()", 3, icono="raiz_n"),
+    Tecla("x^{2}", "^2"),
+    Tecla("x^{□}", "^()", 1),
+    Tecla("e^{□}", "e^()", 1),
+    Tecla(r"\ln", "ln()", 1),
+    Tecla(r"\mathrm{sen}", "sen()", 1),
+    Tecla(r"\cos", "cos()", 1),
+    Tecla(r"\mathrm{tg}", "tg()", 1),
+    Tecla("(", "("),
+    Tecla(")", ")"),
 ]
+# fila de abajo: números y operaciones (claras), flechas, y DEL / AC
+TECLAS_NUMEROS = [Tecla(n, n, estilo="numero", formula=False) for n in "1234567890,"]
+TECLAS_OPERACIONES = [Tecla(r"\times", "*", estilo="operacion"), Tecla(r"\div", "/", estilo="operacion"),
+                      Tecla("+", "+", estilo="operacion"), Tecla("-", "-", estilo="operacion")]
+TECLAS_EDICION = [Tecla("◀", accion="izquierda", formula=False), Tecla("▶", accion="derecha", formula=False),
+                  Tecla("DEL", accion="borrar", estilo="borrar", formula=False),
+                  Tecla("AC", accion="limpiar", estilo="borrar", formula=False)]
+
+def _otro_grupo(anterior, tecla):
+    """Entre grupos de teclas (funciones, variables, números, operaciones, flechas, DEL/AC) va un espacio."""
+    return tecla.estilo != anterior.estilo or (bool(tecla.accion) and not anterior.accion)
 
 
-COLORES_TECLADO = {"operaciones": (250, 238, 214), "potencias": (206, 238, 216), "funciones": (226, 214, 250),
-                   "extras": (255, 228, 186)}
-
-
-NUMEROS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ","]
+ESTILOS_TECLA = {             # (fondo, letra)
+    "funcion": ((66, 72, 90), (255, 255, 255)),
+    "variable": ((66, 72, 90), (255, 255, 255)),
+    "numero": ((250, 248, 242), TINTA),
+    "operacion": ((224, 228, 240), TINTA),
+    "borrar": ((236, 120, 92), (255, 255, 255)),
+}
 
 
 PIE_GATO = (96, ALTO - 8)
@@ -113,28 +171,42 @@ BOCA_GATO = (150, ALTO - 120)
 
 X_GLOBO = 196
 
+# donde está sentado el gato (abajo a la izquierda): ahí no puede ir ningún botón
+ZONA_GATO = pygame.Rect(0, ALTO - 165, X_GLOBO - 10, 165)
+
 
 class PantallaNivel:
     """La parte visual de Juego (se usa como clase madre, junto con Escena)."""
 
     def _teclado(self):
-        """Lista de (grupo, teclas)."""
-        grupos = [(n, list(g)) for n, g in GRUPOS_TECLADO]
-        extra = []
-        # las letras van en la fila de números si está abierta (ahí ya están x, y, z); si no, acá
-        if not self.app.progreso.teclado_numerico:
-            if VAR_Y in self.paso.variables:
-                extra.append(("y", "y", 0))
-            if VAR_Z in self.paso.variables:
-                extra.append(("z", "z", 0))
+        """Las dos filas del teclado para este paso: funciones (más x, y, z, + C o pi y e, según haga
+        falta) y números con operaciones y edición."""
+        extra = [Tecla(str(v), str(v), estilo="variable") for v in self.paso.variables]
         if self.paso.chequeo == "primitiva":
-            extra.append((r"+\,C", "+C", 0))
+            extra.append(Tecla(r"+\,C", "+C", estilo="variable"))
         if self.paso.chequeo == "numero":
-            extra = [(r"\pi", "pi", 0), ("e", "e", 0)]
-            grupos = [(n, g) for n, g in grupos if n != "funciones"]
-        if extra:
-            grupos.append(("extras", extra))
-        return grupos
+            extra += [Tecla(r"\pi", "pi", estilo="variable"), Tecla("e", "e", estilo="variable")]
+        return [TECLAS_FUNCIONES + extra, TECLAS_NUMEROS + TECLAS_OPERACIONES + TECLAS_EDICION]
+
+    def _boton_tecla(self, tecla, x, y, w):
+        fondo, letra = ESTILOS_TECLA[tecla.estilo]
+        if tecla.icono:
+            contenido, tam = _ICONOS[tecla.icono](letra), 19
+        elif tecla.formula:
+            contenido, tam = ui.formula(tecla.etiqueta, 22, letra).sup, 19
+        else:
+            contenido, tam = tecla.etiqueta, (16 if len(tecla.etiqueta) > 1 else 19)
+        acciones = {"izquierda": self.campo.izquierda, "derecha": self.campo.derecha,
+                    "borrar": self.campo.borrar_atras, "limpiar": lambda: self.campo.poner("")}
+        accion = acciones.get(tecla.accion) or (lambda t=tecla: self.campo.insertar(t.texto, t.retroceso))
+        return Boton((x, y, w, 40), contenido, accion, fondo, letra, tam=tam, radio=10, relieve=4, sonido="tecla")
+
+    def _ancho_tecla(self, tecla):
+        if tecla.icono:
+            return max(46, _ICONOS[tecla.icono]((0, 0, 0)).get_width() + 22)
+        if tecla.formula:
+            return max(46, ui.formula(tecla.etiqueta, 22).sup.get_width() + 22)
+        return max(46, ui.texto(tecla.etiqueta, 16, negrita=True).get_width() + 24)
 
     def _boton_saltear(self, rect):
         """Saltear el ejercicio: una vez por nivel, cuesta monedas (en los jefes no se puede)."""
@@ -250,8 +322,8 @@ class PantallaNivel:
             y = self._armar_opciones(c, y, respondiendo)
         contenido = [r for s, r in self.capas if isinstance(r, pygame.Rect)]
         fondo = max([y] + [r.bottom for r in contenido])
-        # ningún botón puede tapar el ejercicio (por ejemplo, el teclado al gráfico de la región)
-        tapa = any(b.rect.colliderect(r) for b in self.botones[3:] for r in contenido)
+        # ningún botón puede tapar el ejercicio (por ejemplo, el teclado al gráfico de la región) ni al gato
+        tapa = any(b.rect.colliderect(r) for b in self.botones[3:] for r in contenido + [ZONA_GATO])
         return fondo <= limite and not tapa
 
     def _rect_lado(self, y):
@@ -316,50 +388,25 @@ class PantallaNivel:
         y += c["leo"]
         if not respondiendo:
             return y
-        grupos = self._teclado()
-        hueco = 16   # espacio entre grupos
-        teclas = []
-        for nombre, lista in grupos:
-            for et, ins, ret in lista:
-                sup_et = ui.formula(et, 22).sup
-                teclas.append((nombre, sup_et, max(46, sup_et.get_width() + 22), ins, ret))
-        total = sum(t[2] for t in teclas) + 6 * len(teclas) + hueco * len(grupos) + 58 + 6 + 56
-        x = self._x_fila(total)
-        anterior = None
-        for nombre, sup_et, w, ins, ret in teclas:
-            if anterior is not None and nombre != anterior:
-                x += hueco
-            anterior = nombre
-            self.botones.append(Boton((x, y, w, 40), sup_et, (lambda a=ins, b=ret: self.campo.insertar(a, b)),
-                                      COLORES_TECLADO[nombre], radio=10, relieve=4, sonido="tecla"))
-            x += w + 6
-        x += hueco
-        abierto = self.app.progreso.teclado_numerico
-        self.botones.append(Boton((x, y, 58, 40), "123", self.alternar_numeros,
-                                  SOL if abierto else DURAZNO, tam=17, radio=10, relieve=4, sonido="tecla"))
-        self.botones.append(Boton((x + 64, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
-                                  radio=10, relieve=4, sonido="tecla"))
-        y += 48
-        if abierto:
-            variables = [str(v) for v in self.paso.variables]
-            numeros = NUMEROS + [None] + variables + [None, "←", "→", "⌫"]
-            total = (len(numeros) - 2) * 52 - 6 + 2 * hueco
-            x = self._x_fila(total)
-            for n in numeros:
-                if n is None:      # separación entre números, letras y flechas
+        hueco = 16   # espacio entre grupos de teclas (funciones, números, operaciones, edición)
+        for fila in self._teclado():
+            anchos = [self._ancho_tecla(t) for t in fila]
+            grupos = [k > 0 and _otro_grupo(fila[k - 1], fila[k]) for k in range(len(fila))]
+            total = sum(anchos) + 6 * (len(fila) - 1) + hueco * sum(grupos)
+            x = self._x_fila(total, y)
+            for tecla, w, nuevo_grupo in zip(fila, anchos, grupos, strict=True):
+                if nuevo_grupo:
                     x += hueco
-                    continue
-                accion = {"←": self.campo.izquierda, "→": self.campo.derecha, "⌫": self.campo.borrar_atras}.get(
-                    n, (lambda n=n: self.campo.insertar(n)))
-                self.botones.append(Boton((x, y, 46, 40), n, accion, TARJETA, tam=19, radio=10, relieve=4,
-                                          sonido="tecla"))
-                x += 52
+                self.botones.append(self._boton_tecla(tecla, x, y, w))
+                x += w + 6
             y += 48
         return y
 
-    def _x_fila(self, total):
-        """Dónde empieza una fila del teclado: centrada en el ejercicio, pero sin salirse de la pantalla."""
-        return max(16, min(self.cx - total // 2, ANCHO - 16 - total))
+    def _x_fila(self, total, y):
+        """Dónde empieza una fila del teclado: centrada en el ejercicio, sin salirse de la pantalla y,
+        si está tan abajo que llega a la altura del gato, corrida para no taparlo."""
+        izquierda = ZONA_GATO.right + 8 if y + 40 > ZONA_GATO.top else 16
+        return max(izquierda, min(self.cx - total // 2, ANCHO - 16 - total))
 
     def _armar_opciones(self, c, y, respondiendo):
         cx, ancho = self.cx, self.ancho
@@ -369,6 +416,9 @@ class PantallaNivel:
         hueco = max(8, round(16 * c["aire"]))
         w = min(540, (ancho - 18) // 2)
         x0 = cx - (2 * w + 18) // 2
+        filas = (len(ops) + 1) // 2
+        if y + filas * (alto + hueco) > ZONA_GATO.top:      # llegan a la altura del gato: se corren
+            x0 = max(x0, ZONA_GATO.right + 8)
         self.rect_opciones = {}
         for k, o in enumerate(ops):
             fila, col = divmod(k, 2)

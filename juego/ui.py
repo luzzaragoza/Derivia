@@ -761,12 +761,21 @@ class CampoTexto:
         self._cambio()
 
     def izquierda(self):
-        self.cursor = max(0, self.cursor - 1)
+        # en una fracción (de la tecla □/□), del denominador se vuelve directo al numerador
+        salto = 3 if self.texto[max(0, self.cursor - 3):self.cursor] == ")/(" else 1
+        self.cursor = max(0, self.cursor - salto)
         self.t = 0
 
     def derecha(self):
-        # desde el índice de una raíz, la flecha salta directo adentro: raiz[3](|)
-        self.cursor = min(len(self.texto), self.cursor + (2 if self._en_indice() else 1))
+        # desde el índice de una raíz, la flecha salta directo adentro: raiz[3](|); y como en la
+        # calculadora, del numerador de una fracción pasa directo al denominador: (1|)/(x) -> (1)/(|x)
+        if self._en_indice():
+            salto = 2
+        elif self.texto[self.cursor:self.cursor + 3] == ")/(":
+            salto = 3
+        else:
+            salto = 1
+        self.cursor = min(len(self.texto), self.cursor + salto)
         self.t = 0
 
     def borrar_atras(self):

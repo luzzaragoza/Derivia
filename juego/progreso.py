@@ -11,7 +11,7 @@ from .rutas import carpeta_datos
 
 log = logging.getLogger(__name__)
 
-REPASOS_PARA_SACAR = 2   # veces que hay que acertar un ejercicio del cuaderno
+REPASOS_PARA_SACAR = 1   # veces que hay que acertar un ejercicio del cuaderno para que salga
 
 
 def _carpeta():
@@ -50,9 +50,8 @@ _CAMPOS = {
     "vol_efectos": 0.6,
     "vol_musica": 0.5,
     "pantalla_completa": False,
-    "teclado_numerico": False,
 }
-_AJUSTES = {"sonido", "musica", "vol_efectos", "vol_musica", "pantalla_completa", "teclado_numerico"}
+_AJUSTES = {"sonido", "musica", "vol_efectos", "vol_musica", "pantalla_completa"}
 
 
 def _por_defecto(campo):

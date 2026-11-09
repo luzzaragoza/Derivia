@@ -180,11 +180,6 @@ class Juego(PantallaNivel, Escena):
         return ""
 
 
-    def alternar_numeros(self):
-        self.app.progreso.teclado_numerico = not self.app.progreso.teclado_numerico
-        self.app.progreso.guardar()
-        self.armar()
-
     def reiniciar(self):
         """Empezar el nivel de nuevo (por ejemplo, para hacerlo perfecto)."""
         if self.practica:
