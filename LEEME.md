@@ -190,6 +190,7 @@ Pruebas:
 ```
 ruff check .                      # análisis del código (pip install ruff)
 python tests/test_progreso.py     # guardado: datos raros, archivo dañado, disco sin permiso...
+python tests/test_teclado.py      # cada tecla del teclado escribe algo que se entiende; ▶ en la fracción
 python tests/test_consignas.py    # las consignas según el tipo de pregunta (el + C solo al tipear)
 python tests/test_mapa.py         # el mapa prepara las islas de antemano y deslizarse no arma nada nuevo
 python tests/test_ejercicios.py   # cientos de ejercicios de cada nivel: respuestas y errores típicos bien armados
