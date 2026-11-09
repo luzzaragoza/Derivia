@@ -37,6 +37,8 @@ jobs:
           pip install -r requisitos-armado.txt
       - name: Guardado del progreso
         run: python tests/test_progreso.py
+      - name: Teclado de fórmulas (tipo calculadora)
+        run: python tests/test_teclado.py
       - name: Consignas (el + C solo al tipear)
         run: python tests/test_consignas.py
       - name: Mapa (islas preparadas, deslizamiento sin trabas)

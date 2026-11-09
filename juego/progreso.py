@@ -11,7 +11,7 @@ from .rutas import carpeta_datos
 
 log = logging.getLogger(__name__)
 
-REPASOS_PARA_SACAR = 2   # veces que hay que acertar un ejercicio del cuaderno
+REPASOS_PARA_SACAR = 1   # veces que hay que acertar un ejercicio del cuaderno para que salga
 
 
 def _carpeta():

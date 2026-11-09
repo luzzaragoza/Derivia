@@ -76,13 +76,13 @@ def test_borrar_todo_deja_copia_y_mantiene_los_ajustes():
     arch = _archivo()
     p = Progreso(arch)
     p.registrar("1", 0, 3, 120)
-    p.sonido, p.teclado_numerico = False, True
+    p.sonido, p.pantalla_completa = False, True
     p.guardar()
     respaldo = p.borrar_todo()
     assert respaldo is not None and json.loads(respaldo.read_text(encoding="utf-8"))["niveles"]
     q = Progreso(arch)
     assert q.niveles == {} and q.monedas == 0
-    assert q.sonido is False and q.teclado_numerico is True
+    assert q.sonido is False and q.pantalla_completa is True
 
 
 def test_si_no_se_puede_guardar_el_juego_sigue():

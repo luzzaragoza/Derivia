@@ -14,7 +14,6 @@ from ..ui import (
     ARENA,
     BORDE,
     CORAL,
-    LAVANDA,
     MADERA_OSC,
     SOL,
     Boton,
@@ -35,15 +34,17 @@ class Menu(Escena):
     def armar(self):
         app = self.app
         n = len(app.progreso.cuaderno)
-        x, y = 690, 236
+        x, y = 690, 262
         self.botones = [
             Boton((x, y, 400, 74), "¡Jugar!", self.jugar, CORAL, CREMA, tam=34, tecla=[pygame.K_RETURN, pygame.K_KP_ENTER]),
             Boton((x, y + 92, 400, 56), f"Tienda de {app.progreso.nombre_gato}" if app.progreso.nombre_gato
                   else "Tienda del michi", lambda: app.cambiar(escenas.Tienda(app), "ola"), (255, 170, 200), tam=24),
             Boton((x, y + 162, 400, 56), f"Cuaderno de errores ({n})", lambda: app.cambiar(escenas.Cuaderno(app)), SOL, tam=23),
-            Boton((x, y + 232, 400, 56), "Cómo escribir fórmulas", lambda: app.cambiar(escenas.Ayuda(app)), LAVANDA, tam=23),
-            Boton((x, y + 302, 193, 56), "Opciones", self.abrir_opciones, ARENA, tam=22),
-            Boton((x + 207, y + 302, 193, 56), "Salir", app.salir, ARENA, tam=22),
+            Boton((x, y + 232, 193, 56), "Opciones", self.abrir_opciones, ARENA, tam=22),
+            Boton((x + 207, y + 232, 193, 56), "Salir", app.salir, ARENA, tam=22),
+            # la ayuda para escribir fórmulas, a mano pero sin ocupar lugar en el menú
+            Boton((ANCHO - 290, ui.ALTO - 58, 270, 40), "¿Cómo escribo fórmulas?", lambda: app.cambiar(escenas.Ayuda(app)),
+                  (236, 228, 214), ui.SUAVE, tam=14, relieve=3),
         ]
 
     def _preparar_mapa(self):
