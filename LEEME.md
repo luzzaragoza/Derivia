@@ -30,10 +30,12 @@ Un juego para aprender a derivar e integrar, de a un paso por vez: desde la regl
 - **Integrales dobles**: te muestra el dibujo de la región.
 - **Cada mundo es una isla distinta**: de la Isla Serena a la Isla Calavera, cada vez un poco más misteriosas.
 - **Tu michi tiene nombre**: se lo ponés la primera vez (y lo cambiás tocando su cartelito en el menú).
-- **Teclado de fórmulas** como el de la calculadora Casio fx-991LA CW: teclas oscuras de funciones con
-  casilleros (□/□, √□, ⁿ√□, x², x^□, e^□, ln, sen, cos, tg) y teclas claras de números y operaciones, con
-  ◀ ▶, DEL y AC (anda con pantalla táctil). En una fracción, ▶ pasa del numerador al denominador. La ayuda
-  para escribir fórmulas está abajo a la derecha del menú. Los paréntesis se colorean por pareja. El punto
+- **Teclado de fórmulas** copiado de la calculadora Casio fx-991LA CW: teclas claras sobre una placa rosa,
+  con el bloque de funciones a la izquierda (x, □/□, √■, ■², ■^□, ⁿ√■, ln, sen, cos, tan, paréntesis, e^□
+  y las variables o + C) y el de números a la derecha (7 8 9 ⌫ AC / 4 5 6 × ÷ / 1 2 3 + − / 0 , ◀ ▶ EXE).
+  Como en la calculadora, ■ es lo que ya escribiste y □ lo que falta completar; en una fracción, ▶ pasa del
+  numerador al denominador, y EXE comprueba. Anda con pantalla táctil. La ayuda para escribir fórmulas
+  está abajo a la derecha del menú. Los paréntesis se colorean por pareja. El punto
   también multiplica (`2.x`); los decimales van con coma (`0,5`).
 - **Detective de errores**: a veces te muestran la resolución de otra persona y tenés que encontrar el error.
 - **PENSÁ / CALCULÁ**: cada consigna dice si es de razonar o de hacer la cuenta (y cambia la música).
