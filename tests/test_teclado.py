@@ -1,4 +1,4 @@
-"""El teclado de fórmulas (copiado de la Casio fx-991LA CW) escribe cosas que el juego entiende.
+"""El teclado de fórmulas escribe cosas que el juego entiende.
 
 - Cada tecla de función deja el cursor en su casillero y, al completarla, la fórmula se entiende.
 - En una fracción (tecla □/□), → pasa del numerador al denominador y ← vuelve, como en la calculadora.
@@ -16,7 +16,7 @@ import pygame  # noqa: E402
 pygame.init()
 pygame.display.set_mode((64, 64))
 
-from juego.escenas.nivel_pantalla import FILAS_FUNCIONES, FILAS_NUMEROS  # noqa: E402
+from juego.escenas.nivel_pantalla import GRUPOS_TECLADO  # noqa: E402
 from juego.mate import parsear, x  # noqa: E402
 from juego.ui import CampoTexto  # noqa: E402
 
@@ -26,8 +26,7 @@ def campo():
 
 
 def test_cada_tecla_de_funcion_se_entiende():
-    teclas = [t for fila in FILAS_FUNCIONES + FILAS_NUMEROS for t in fila if t.texto and not t.texto.isdigit()
-              and t.texto not in (",", "x")]
+    teclas = [t for _, grupo in GRUPOS_TECLADO for t in grupo]
     assert len(teclas) >= 14, teclas
     for tecla in teclas:
         c = campo()
@@ -39,12 +38,7 @@ def test_cada_tecla_de_funcion_se_entiende():
         if tecla.texto == "()/()":             # fracción: numerador, → y denominador
             c.insertar("1")
             c.derecha()
-        if tecla.texto != ")":
-            c.insertar("x")
-        if tecla.texto == "(":
-            c.insertar(")")
-        if tecla.texto == ")":
-            c.poner("(2x)")
+        c.insertar("x")
         parsear(c.texto, (x,))                 # no tiene que tirar ErrorEntrada
 
 

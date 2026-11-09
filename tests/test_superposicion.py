@@ -2,7 +2,7 @@
 
 Arma TODOS los pasos de ejercicios de todos los niveles en las situaciones que agrandan el globito
 del gato (te equivocaste, pediste pistas, se reveló la respuesta, acertaste con explicación),
-y se fija que:
+con el teclado numérico abierto y cerrado, y se fija que:
 
 - el globito no tape el ejercicio (consigna, fórmula, pasos, pregunta, campo de texto),
 - ningún botón tape el ejercicio (ni el gráfico de la región),
@@ -139,12 +139,14 @@ def main():
                         j.paso_i = paso_i
                         j.empezar_paso()
                         j.charla = None
-                        j.armar()
-                        for situacion in _situaciones(j):
-                            total += 1
-                            for p in _problemas(j):
-                                clave = (m.nombre, nivel.nombre, situacion, p.split(" <")[0])
-                                fallas.setdefault(clave, (p, j.ej.formula, j.paso.pregunta))
+                        for teclado in (False, True):
+                            app.progreso.teclado_numerico = teclado
+                            j.armar()
+                            for situacion in _situaciones(j):
+                                total += 1
+                                for p in _problemas(j):
+                                    clave = (m.nombre, nivel.nombre, situacion, p.split(" <")[0])
+                                    fallas.setdefault(clave, (p, j.ej.formula, j.paso.pregunta))
     if fallas:
         print(f"{len(fallas)} problemas (en {total} pantallas):")
         for (mundo, nivel, sit, _), (p, formula, pregunta) in sorted(fallas.items()):

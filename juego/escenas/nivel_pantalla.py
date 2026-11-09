@@ -92,22 +92,20 @@ def flecha_reiniciar(sup, centro, tam, color):
 # operaciones, potencias y raíces, funciones. Los extras (y, z, +C, π, e) van al final.
 @dataclass(frozen=True)
 class Tecla:
-    """Una tecla del teclado de fórmulas, copiado de la calculadora Casio fx-991LA CW.
-    etiqueta: lo que se ve (LaTeX sin $, o texto). Como en la calculadora, ■ es lo que ya escribiste
-    y □ el casillero que falta completar. texto: lo que escribe; retroceso: cuántos lugares vuelve el
-    cursor después (para quedar adentro del paréntesis). accion: en vez de escribir, mueve el cursor,
-    borra o comprueba ("izquierda", "derecha", "borrar", "limpiar", "comprobar")."""
+    """Una tecla del teclado de fórmulas. Las etiquetas siguen la idea de la calculadora (Casio
+    fx-991LA CW): ■ es lo que ya escribiste y □ el casillero que falta completar.
+    etiqueta: lo que se ve (LaTeX sin $, o texto). texto: lo que escribe; retroceso: cuántos lugares
+    vuelve el cursor después (para quedar adentro del paréntesis). accion: en vez de escribir, mueve
+    el cursor o borra ("izquierda", "derecha", "borrar"). icono: se dibuja a mano (ver _ICONOS)."""
     etiqueta: str
     texto: str = ""
     retroceso: int = 0
     accion: str = ""
-    formula: bool = True          # la etiqueta se dibuja como fórmula
-    icono: str = ""               # o se dibuja a mano: ver _ICONOS
-    grande: bool = False          # los números, con letra más grande (como en la calculadora)
+    icono: str = ""
 
 
 def _icono_fraccion(color):
-    """□ arriba, rayita, □ abajo (la tecla de fracción de la calculadora)."""
+    """□ arriba, rayita, □ abajo (como la tecla de fracción de la calculadora)."""
     s = Lienzo(24, 30)
     dibujo.rect(s, color, (6, 1, 12, 10), 2, border_radius=2)
     dibujo.line(s, color, (2, 15), (22, 15), 2)
@@ -125,7 +123,7 @@ def _icono_raiz_n(color):
 
 
 def _icono_borrar(color):
-    """La tecla de borrar de la calculadora: una flecha-etiqueta negra con una cruz blanca."""
+    """Borrar, como en la calculadora: una flecha-etiqueta con una cruz."""
     s = Lienzo(30, 20)
     dibujo.polygon(s, color, [(0, 10), (9, 1), (29, 1), (29, 19), (9, 19)])
     dibujo.line(s, (255, 255, 255), (14, 6), (23, 14), 2)
@@ -135,31 +133,21 @@ def _icono_borrar(color):
 
 _ICONOS = {"fraccion": _icono_fraccion, "raiz_n": _icono_raiz_n, "borrar": _icono_borrar}
 
-# bloque de funciones (como las dos filas de arriba de la calculadora; ln, e^□ y ⁿ√ no están a la
-# vista en la calculadora pero acá hacen falta, y van en el lugar de log y Ans)
-FILAS_FUNCIONES = [
-    [Tecla("x", "x"), Tecla("□/□", "()/()", 4, icono="fraccion"), Tecla(r"\sqrt{■}", "raiz()", 1),
-     Tecla("■^{2}", "^2"), Tecla("■^{□}", "^()", 1), Tecla("ⁿ√■", "raiz[]()", 3, icono="raiz_n")],
-    [Tecla(r"\ln", "ln()", 1), Tecla(r"\mathrm{sen}", "sen()", 1), Tecla(r"\cos", "cos()", 1),
-     Tecla(r"\tan", "tan()", 1), Tecla("(", "("), Tecla(")", ")")],
-    [Tecla("e^{□}", "e^()", 1)],      # + las variables y + C, o pi y e, según el paso
+# la fila de siempre, por grupos (cada grupo con su color)
+GRUPOS_TECLADO = [
+    ("operaciones", [Tecla("+", "+"), Tecla("-", "-"), Tecla(r"\times", "*"), Tecla(r"\div", "/"),
+                     Tecla("(□)", "()", 1)]),
+    ("potencias", [Tecla("□/□", "()/()", 4, icono="fraccion"), Tecla("■^{2}", "^2"), Tecla("■^{□}", "^()", 1),
+                   Tecla(r"\sqrt{■}", "raiz()", 1), Tecla("ⁿ√■", "raiz[]()", 3, icono="raiz_n")]),
+    ("funciones", [Tecla(r"\mathrm{sen}", "sen()", 1), Tecla(r"\cos", "cos()", 1), Tecla(r"\tan", "tan()", 1),
+                   Tecla("e^{□}", "e^()", 1), Tecla(r"\ln", "ln()", 1)]),
 ]
-# bloque numérico, igual que la calculadora (con ◀ ▶ en el lugar de ×10^■ y FORMAT)
-FILAS_NUMEROS = [
-    [Tecla("7", "7", formula=False, grande=True), Tecla("8", "8", formula=False, grande=True),
-     Tecla("9", "9", formula=False, grande=True), Tecla("DEL", accion="borrar", icono="borrar"),
-     Tecla("AC", accion="limpiar", formula=False)],
-    [Tecla("4", "4", formula=False, grande=True), Tecla("5", "5", formula=False, grande=True),
-     Tecla("6", "6", formula=False, grande=True), Tecla(r"\times", "*"), Tecla(r"\div", "/")],
-    [Tecla("1", "1", formula=False, grande=True), Tecla("2", "2", formula=False, grande=True),
-     Tecla("3", "3", formula=False, grande=True), Tecla("+", "+"), Tecla("-", "-")],
-    [Tecla("0", "0", formula=False, grande=True), Tecla(",", ",", formula=False, grande=True),
-     Tecla("◀", accion="izquierda", formula=False), Tecla("▶", accion="derecha", formula=False),
-     Tecla("EXE", accion="comprobar", formula=False)],
-]
-TECLA_FONDO, TECLA_LETRA = (253, 249, 248), TINTA          # teclas claras con letra oscura
-CALCULADORA = (244, 206, 214)                               # el rosa de la calculadora, de fondo
-TECLA_ANCHO, TECLA_HUECO = 58, 6       # (el alto depende de cuánto haya que compactar la pantalla)
+COLORES_TECLADO = {"operaciones": (250, 238, 214), "potencias": (206, 238, 216), "funciones": (226, 214, 250),
+                   "extras": (255, 228, 186)}
+# la fila de números (se abre con 123)
+NUMEROS = [Tecla(n, n) for n in "1234567890,"]
+EDICION = [Tecla("◀", accion="izquierda"), Tecla("▶", accion="derecha"),
+           Tecla("DEL", accion="borrar", icono="borrar")]
 
 
 PIE_GATO = (96, ALTO - 8)
@@ -172,56 +160,44 @@ X_GLOBO = 196
 
 # donde está sentado el gato (abajo a la izquierda): ahí no puede ir ningún botón
 ZONA_GATO = pygame.Rect(0, ALTO - 165, X_GLOBO - 10, 165)
+PANTALLA = pygame.Rect(0, 0, ANCHO, ALTO)
 
 
 class PantallaNivel:
     """La parte visual de Juego (se usa como clase madre, junto con Escena)."""
 
     def _teclado(self):
-        """Los dos bloques del teclado para este paso: funciones (con las variables y + C, o pi y e,
-        según haga falta) y números."""
-        funciones = [list(f) for f in FILAS_FUNCIONES]
-        extra = [Tecla(str(v), str(v)) for v in self.paso.variables if str(v) != "x"]
+        """Lista de (grupo, teclas) para la fila de siempre."""
+        grupos = [(n, list(g)) for n, g in GRUPOS_TECLADO]
+        extra = []
+        # las letras van en la fila de números si está abierta (ahí ya están x, y, z); si no, acá
+        if not self.app.progreso.teclado_numerico:
+            extra += [Tecla(str(v), str(v)) for v in self.paso.variables if str(v) != "x"]
         if self.paso.chequeo == "primitiva":
             extra.append(Tecla(r"+\,C", "+C"))
         if self.paso.chequeo == "numero":
-            extra += [Tecla(r"\pi", "pi"), Tecla("e", "e")]
-        funciones[-1] += extra
-        return funciones, FILAS_NUMEROS
+            extra = [Tecla(r"\pi", "pi"), Tecla("e", "e")]
+            grupos = [(n, g) for n, g in grupos if n != "funciones"]
+        if extra:
+            grupos.append(("extras", extra))
+        return grupos
 
-    def _boton_tecla(self, tecla, rect):
+    def _etiqueta(self, tecla, color=TINTA):
         if tecla.icono:
-            contenido = _ICONOS[tecla.icono](TECLA_LETRA)
-        elif tecla.formula:
-            contenido = ui.formula(tecla.etiqueta, 22, TECLA_LETRA).sup
-        else:
-            contenido = tecla.etiqueta
-        acciones = {"izquierda": self.campo.izquierda, "derecha": self.campo.derecha,
-                    "borrar": self.campo.borrar_atras, "limpiar": lambda: self.campo.poner(""),
-                    "comprobar": self.comprobar}
-        accion = acciones.get(tecla.accion) or (lambda t=tecla: self.campo.insertar(t.texto, t.retroceso))
-        return Boton(rect, contenido, accion, TECLA_FONDO, TECLA_LETRA, tam=22 if tecla.grande else 16,
-                     radio=14, relieve=3, sonido="tecla")
+            return _ICONOS[tecla.icono](color)
+        if len(tecla.etiqueta) == 1 and not tecla.etiqueta.isalpha() and tecla.etiqueta not in "+-":
+            return tecla.etiqueta          # números, coma y flechas: texto común
+        return ui.formula(tecla.etiqueta, 22, color).sup
 
-    def _armar_teclado(self, y, alto_tecla):
-        """El teclado como en la calculadora: bloque de funciones a la izquierda y números a la derecha,
-        sobre una placa del color de la calculadora. Devuelve dónde termina."""
-        funciones, numeros = self._teclado()
-        paso = TECLA_ANCHO + TECLA_HUECO
-        cols_f = max(len(f) for f in funciones)
-        cols_n = max(len(f) for f in numeros)
-        separacion = 22
-        ancho = (cols_f + cols_n) * paso - 2 * TECLA_HUECO + separacion
-        filas = max(len(funciones), len(numeros))
-        alto = filas * (alto_tecla + TECLA_HUECO) - TECLA_HUECO
-        x0 = self._x_fila(ancho + 24, y) + 12
-        self.placa_teclado = pygame.Rect(x0 - 12, y - 8, ancho + 24, alto + 16)
-        for bloque, x_bloque in ((funciones, x0), (numeros, x0 + cols_f * paso - TECLA_HUECO + separacion)):
-            for i, fila in enumerate(bloque):
-                for j, tecla in enumerate(fila):
-                    rect = (x_bloque + j * paso, y + i * (alto_tecla + TECLA_HUECO), TECLA_ANCHO, alto_tecla)
-                    self.botones.append(self._boton_tecla(tecla, rect))
-        return y + alto + 8
+    def _boton_tecla(self, tecla, rect, color):
+        acciones = {"izquierda": self.campo.izquierda, "derecha": self.campo.derecha,
+                    "borrar": self.campo.borrar_atras}
+        accion = acciones.get(tecla.accion) or (lambda t=tecla: self.campo.insertar(t.texto, t.retroceso))
+        return Boton(rect, self._etiqueta(tecla), accion, color, tam=19, radio=10, relieve=4, sonido="tecla")
+
+    def _ancho_tecla(self, tecla):
+        et = self._etiqueta(tecla)
+        return 46 if isinstance(et, str) else max(46, et.get_width() + 22)
 
     def _boton_saltear(self, rect):
         """Saltear el ejercicio: una vez por nivel, cuesta monedas (en los jefes no se puede)."""
@@ -252,18 +228,12 @@ class PantallaNivel:
     # los botones de Pista y Saltear. El ejercicio va arriba de esa franja y NUNCA se pisa con ella:
     # si no entra, se va compactando de a poco (menos aire, fórmulas más chicas, pasos en una línea).
     COMPACTOS = (
-        # aire, alto fórmula, alto gráfico, tam pregunta, tam pasos, pasos en línea, alto opciones, alto "Leo",
-        # tam globo, alto de las teclas
-        dict(aire=1.0, formula=None, grafico=None, pregunta=24, pasos=20, en_linea=False, opcion=84, leo=44, globo=19,
-             tecla=36),
-        dict(aire=0.7, formula=96, grafico=300, pregunta=22, pasos=18, en_linea=False, opcion=72, leo=34, globo=19,
-             tecla=36),
-        dict(aire=0.5, formula=76, grafico=260, pregunta=21, pasos=17, en_linea=True, opcion=62, leo=30, globo=18,
-             tecla=34),
-        dict(aire=0.4, formula=62, grafico=220, pregunta=20, pasos=16, en_linea=True, opcion=54, leo=28, globo=17,
-             tecla=32),
-        dict(aire=0.3, formula=50, grafico=180, pregunta=19, pasos=15, en_linea=True, opcion=48, leo=26, globo=16,
-             tecla=30),
+        # aire, alto fórmula, alto gráfico, tam pregunta, tam pasos, pasos en línea, alto opciones, alto "Leo", tam globo
+        dict(aire=1.0, formula=None, grafico=None, pregunta=24, pasos=20, en_linea=False, opcion=84, leo=44, globo=19),
+        dict(aire=0.7, formula=96, grafico=300, pregunta=22, pasos=18, en_linea=False, opcion=72, leo=34, globo=19),
+        dict(aire=0.5, formula=76, grafico=260, pregunta=21, pasos=17, en_linea=True, opcion=62, leo=30, globo=18),
+        dict(aire=0.4, formula=62, grafico=220, pregunta=20, pasos=16, en_linea=True, opcion=54, leo=28, globo=17),
+        dict(aire=0.3, formula=50, grafico=180, pregunta=19, pasos=15, en_linea=True, opcion=48, leo=26, globo=16),
     )
 
     MARGEN = 12          # entre la franja del gato y el borde de abajo
@@ -284,7 +254,6 @@ class PantallaNivel:
                         self.boton_opciones((130, 10, 48, 44)),
                         Boton((186, 10, 48, 44), icono, self.reiniciar, ARENA, relieve=4)]
         self.capas = []
-        self.placa_teclado = None
         respondiendo = self.estado == "pregunta"
 
         # 1) la franja del gato, de abajo para arriba: así se sabe cuánto lugar le queda al ejercicio
@@ -346,7 +315,10 @@ class PantallaNivel:
         fondo = max([y] + [r.bottom for r in contenido])
         # ningún botón puede tapar el ejercicio (por ejemplo, el teclado al gráfico de la región) ni al gato
         tapa = any(b.rect.colliderect(r) for b in self.botones[3:] for r in contenido + [ZONA_GATO])
-        return fondo <= limite and not tapa
+        # ...y todo tiene que entrar en la pantalla (si el teclado queda a la altura del gato, se corre a
+        # la derecha y puede no entrar: entonces hay que compactar para que suba)
+        afuera = any(not PANTALLA.contains(b.rect) for b in self.botones)
+        return fondo <= limite and not tapa and not afuera
 
     def _rect_lado(self, y):
         """Lugar de los botones Pista y Saltear cuando el gato no está hablando: abajo, al lado del gato."""
@@ -410,7 +382,39 @@ class PantallaNivel:
         y += c["leo"]
         if not respondiendo:
             return y
-        return self._armar_teclado(y + 8, c["tecla"])
+        grupos = self._teclado()
+        hueco = 16   # espacio entre grupos
+        teclas = [(nombre, t, self._ancho_tecla(t)) for nombre, lista in grupos for t in lista]
+        total = sum(w for _, _, w in teclas) + 6 * len(teclas) + hueco * len(grupos) + 58 + 6 + 56
+        x = self._x_fila(total, y)
+        anterior = None
+        for nombre, tecla, w in teclas:
+            if anterior is not None and nombre != anterior:
+                x += hueco
+            anterior = nombre
+            self.botones.append(self._boton_tecla(tecla, (x, y, w, 40), COLORES_TECLADO[nombre]))
+            x += w + 6
+        x += hueco
+        abierto = self.app.progreso.teclado_numerico
+        self.botones.append(Boton((x, y, 58, 40), "123", self.alternar_numeros,
+                                  SOL if abierto else DURAZNO, tam=17, radio=10, relieve=4, sonido="tecla"))
+        self.botones.append(Boton((x + 64, y, 56, 40), "AC", lambda: self.campo.poner(""), ui.ROSA, tam=17,
+                                  radio=10, relieve=4, sonido="tecla"))
+        y += 48
+        if abierto:
+            variables = [Tecla(str(v), str(v)) for v in self.paso.variables]
+            fila = [*NUMEROS, None, *variables, None, *EDICION]
+            anchos = [0 if t is None else self._ancho_tecla(t) for t in fila]
+            total = sum(anchos) + 6 * (len(fila) - 2) - 6 + 2 * hueco
+            x = self._x_fila(total, y)
+            for tecla, w in zip(fila, anchos, strict=True):
+                if tecla is None:      # separación entre números, letras y edición
+                    x += hueco
+                    continue
+                self.botones.append(self._boton_tecla(tecla, (x, y, w, 40), TARJETA))
+                x += w + 6
+            y += 48
+        return y
 
     def _x_fila(self, total, y):
         """Dónde empieza una fila del teclado: centrada en el ejercicio, sin salirse de la pantalla y,
@@ -596,10 +600,6 @@ class PantallaNivel:
                     sup.blit(fm, (x + et.get_width() + 12, cy - fm.get_height() // 2))
                 else:
                     centrar(sup, ui.texto(self.preview[1], 18, SUAVE), self.y_preview + 6, self.cx)
-        if self.placa_teclado:            # el cuerpo de la calculadora, detrás de las teclas
-            placa = self.placa_teclado.move(dx, 0)
-            dibujo.rect(sup, ui.oscurecer(CALCULADORA, 0.85), placa.move(0, 3), border_radius=22)
-            dibujo.rect(sup, CALCULADORA, placa, border_radius=22)
         for b in self.botones:
             b.dibujar(sup, dx if b.rect.top > 90 else 0)
         # el gato y su globito

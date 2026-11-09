@@ -50,8 +50,9 @@ _CAMPOS = {
     "vol_efectos": 0.6,
     "vol_musica": 0.5,
     "pantalla_completa": False,
+    "teclado_numerico": False,
 }
-_AJUSTES = {"sonido", "musica", "vol_efectos", "vol_musica", "pantalla_completa"}
+_AJUSTES = {"sonido", "musica", "vol_efectos", "vol_musica", "pantalla_completa", "teclado_numerico"}
 
 
 def _por_defecto(campo):
